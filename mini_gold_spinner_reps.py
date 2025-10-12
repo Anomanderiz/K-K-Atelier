@@ -375,7 +375,7 @@ def server(input, output, session):
         else:
             gs_status_msg.set("✅ Connected to Google Sheets")
             agg_gold.set(int(round(total))); agg_jobs.set(int(jobs))
-            tier = min(jobs // 5, 10); tier_idx.set(int(tier))
+            tier = min(jobs // 5, 9); tier_idx.set(int(tier))
         return ws, None
 
     try:
