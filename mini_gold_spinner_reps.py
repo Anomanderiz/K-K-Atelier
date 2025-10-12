@@ -213,10 +213,10 @@ app_ui = ui.page_fixed(
     ui.h2(APP_TITLE),
     ui.div({"class":"grid"},
         ui.div({"id":"rep","class":"card"}, ui.h4("Reputation"), ui.output_ui("rep_kpi"),
-               ui.div({{"id":"tiers-overlay","class":"card"}}, ui.output_ui("tier_panel"))),
-        ui.div({{"id":"logo","class":"card"}}, ui.img(src=f"data:image/png;base64,", class_="logoimg")),
-        ui.div({{"id":"gold","class":"card"}}, ui.output_ui("gold_kpi")),
-        ui.div({{"id":"roll","class":"card"}},
+               ui.div({"id":"tiers-overlay","class":"card"}, ui.output_ui("tier_panel"))),
+        ui.div({"id":"logo","class":"card"}, ui.img(src=f"data:image/png;base64,", class_="logoimg")),
+        ui.div({"id":"gold","class":"card"}, ui.output_ui("gold_kpi")),
+        ui.div({"id":"roll","class":"card"},
             ui.h4("Rolls and Flair"),
             ui.input_slider("roll","Dice Result (1–30)",1,30,15),
             ui.input_checkbox("flair_pass","Passable narrative  (+10%)",False),
@@ -225,12 +225,12 @@ app_ui = ui.page_fixed(
             ui.input_text("note","Note (optional)",""),
             ui.hr(),
             ui.input_action_button("save","Save result to Google Sheets"),
-            ui.div({{"class":"kpi-sub"}},"Status: ", ui.output_text("gs_status_text"))
+            ui.div({"class":"kpi-sub"},"Status: ", ui.output_text("gs_status_text"))
         ),
-        ui.div({{"id":"wheelcard","class":"card"}},
+        ui.div({"id":"wheelcard","class":"card"},
             ui.h4("Wheel of fortune"), ui.output_ui("wheel_ui"), ui.output_ui("wheel_result")
         ),
-        ui.div({{"id":"payout","class":"card"}},
+        ui.div({"id":"payout","class":"card"},
             ui.h4("Payout Estimates"), ui.output_ui("payout_block")
         ),
     ),
