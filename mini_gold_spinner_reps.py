@@ -212,7 +212,7 @@ app_ui = ui.page_fixed(
     ui.head_content(ui.HTML(GLOBAL_CSS)),
     ui.h2(APP_TITLE),
     ui.div({"class":"grid"},
-        ui.div({{"id":"rep","class":"card"}}, ui.h4("Reputation"), ui.output_ui("rep_kpi"),
+        ui.div({"id":"rep","class":"card"}, ui.h4("Reputation"), ui.output_ui("rep_kpi"),
                ui.div({{"id":"tiers-overlay","class":"card"}}, ui.output_ui("tier_panel"))),
         ui.div({{"id":"logo","class":"card"}}, ui.img(src=f"data:image/png;base64,", class_="logoimg")),
         ui.div({{"id":"gold","class":"card"}}, ui.output_ui("gold_kpi")),
