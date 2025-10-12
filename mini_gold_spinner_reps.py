@@ -1,18 +1,17 @@
 
-# Mini Gold Spinner — all-gold text in cards, fixed backdrop, editable palette
+# Mini Gold Spinner — glass UI, real backdrop, editable palette (v7)
 import os, io, math, random, base64, datetime as dt
-from typing import List, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 from shiny import App, ui, reactive, render
 
-# ----------------------- Quick color palette (edit here) -----------------------
-ACCENT   = "#ecc791"   # Gold: default text, buttons, outlines
-TITLE_COL= "#eaebec"   # App title color only
-MAJOR_BG = "#301c2d"   # Page background behind the backdrop
-CARD_ALPHA = 0.52      # Card background opacity (0..1)
+# ----------------------- Quick colour palette (edit here) -----------------------
+ACCENT     = "#ecc791"   # Gold: default text, buttons, outlines
+TITLE_COL  = "#eaebec"   # App title colour only
+MAJOR_BG   = "#301c2d"   # Fallback page colour behind the image
+CARD_ALPHA = 0.52        # Card background opacity (0..1)
 
-# ----------------------- Optional Google Sheets deps -----------------------
+# ----------------------- Optional Google Sheets deps ----------------------------
 try:
     import gspread  # type: ignore
     from google.oauth2 import service_account  # type: ignore
@@ -21,19 +20,19 @@ except Exception:
 
 APP_TITLE = "K&K Atelier — Mini Gold Spinner"
 
-# ----------------------- Game constants -----------------------
+# ---------------- Game constants ----------------
 WHEEL_MULTS = [0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5]
 TIER_NAMES = [
-
-# Bonus percent given a zero-based tier index; final tier grants 100%
-def tier_bonus_pct(tier:int, total_tiers:int=len(TIER_NAMES)):
-    return 100 if tier >= (total_tiers - 1) else tier * 10
     "Dusting Dabbler","Curtain–Cord Wrangler","Tapestry Tender","Chandelier Charmer",
     "Parlour Perfectionist","Gilded Guilder","Salon Savant","Waterdhavian Tastemaker",
     "Noble–House Laureate","Master of Makeovers"
 ]
 BASE_CAP   = 250
 MIN_PAYOUT = 50
+
+# Final-tier = 100% bonus; earlier tiers 0,10,...,90
+def tier_bonus_pct(tier, total_tiers=len(TIER_NAMES)):
+    return 100 if tier >= (total_tiers - 1) else tier * 10
 
 # ---------------- Google Sheets config ----------------
 SPREADSHEET_ID = (os.getenv("GSHEETS_SPREADSHEET_ID") or os.getenv("SHEET_ID","")).strip()
@@ -42,7 +41,8 @@ SA_JSON_INLINE = (os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") or os.getenv("GCP_SA_
 SA_JSON_FILE   = os.getenv("GOOGLE_APPLICATION_CREDENTIALS","").strip()
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
 
-def clamp(v, lo, hi): return max(lo, min(hi, v))
+def clamp(v, lo, hi):
+    return max(lo, min(hi, v))
 
 def roll_to_base_gold(roll):
     roll = clamp(int(roll), 1, 30)
@@ -56,7 +56,7 @@ def load_asset_b64(name):
             return base64.b64encode(f.read()).decode()
     return ""
 
-def draw_wheel(labels, size= 980):
+def draw_wheel(labels, size=980):
     n = len(labels)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -73,7 +73,6 @@ def draw_wheel(labels, size= 980):
     except Exception:
         font = ImageFont.load_default()
     for i, lab in enumerate(labels):
-        import math
         ang = math.radians(360 * (i + 0.5) / n - 90)
         tx = cx + int((r - 120) * math.cos(ang))
         ty = cy + int((r - 120) * math.sin(ang))
@@ -87,84 +86,7 @@ def to_b64(img):
 
 HEADERS = ["timestamp_iso","note","roll","base_gold","wheel_multiplier","narrative_pct","raw_total","final_award_gp"]
 
-def ensure_gspread_client():
-    if gspread is None:
-        return None, "gspread not installed in this environment."
-    try:
-        if SA_JSON_INLINE:
-            info = service_account.Credentials.from_service_account_info(
-                __import__("json").loads(SA_JSON_INLINE), scopes=SCOPES
-            )
-            return gspread.authorize(info), None
-        if SA_JSON_FILE and os.path.exists(SA_JSON_FILE):
-            creds = service_account.Credentials.from_service_account_file(SA_JSON_FILE, scopes=SCOPES)
-            return gspread.authorize(creds), None
-        return None, "No Google credentials provided."
-    except Exception as e:
-        return None, f"Credential error: {e}"
 
-def open_worksheet(gc):
-    if not SPREADSHEET_ID:
-        return None, "GSHEETS_SPREADSHEET_ID/SHEET_ID is not set."
-    try:
-        sh = gc.open_by_key(SPREADSHEET_ID)
-        try:
-            ws = sh.worksheet(WORKSHEET_NAME)
-        except Exception:
-            ws = sh.add_worksheet(WORKSHEET_NAME, rows=2000, cols=20)
-        return ws, None
-    except Exception as e:
-        return None, f"Open sheet error: {e}"
-
-def ensure_headers(ws):
-    try:
-        first_row = ws.row_values(1)
-        if not first_row:
-            ws.update("A1:H1", [HEADERS])
-    except Exception:
-        pass
-
-def append_result(ws, row_values):
-    try:
-        ws.append_row(row_values, value_input_option="USER_ENTERED")
-        return None
-    except Exception as e:
-        return str(e)
-
-def fetch_stats(ws):
-    try:
-        col = ws.col_values(8)[1:]
-        total = 0.0
-        jobs = 0
-        for v in col:
-            try:
-                total += float(v)
-                jobs += 1
-            except Exception:
-                continue
-        return total, jobs, None
-    except Exception as e:
-        return 0.0, 0, str(e)
-
-# ---------------- Shiny reactive state ----------------
-selected_index = reactive.Value(None)   # type: ignore
-last_angle     = reactive.Value(0.0)
-spin_token     = reactive.Value(False)
-
-gs_status_msg  = reactive.Value("Not connected")
-agg_gold       = reactive.Value(0)
-agg_jobs       = reactive.Value(0)
-tier_idx       = reactive.Value(0)
-show_tiers     = reactive.Value(False)
-
-# ---------------- Assets ----------------
-LOGO_B64 = load_asset_b64("Logo.png")
-BG_B64   = load_asset_b64("Backdrop.png")
-LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
-BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
-
-# ---------------- UI ----------------
-# CSS via token replacement (no f-strings in CSS)
 GLOBAL_CSS = """
 <style>
 :root {
@@ -213,6 +135,8 @@ h3, h4 { margin: 0 0 14px 0; font-size: 20px; color: var(--accent); }
   background: rgba(34, 16, 30, var(--card-alpha));
   border: 1px solid var(--accent); border-radius: 22px; padding: 20px;
   color: var(--accent);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
 }
 /* Belt-and-braces: force all descendants inside cards to gold */
 .card * { color: var(--accent); }
@@ -299,6 +223,83 @@ GLOBAL_CSS = (GLOBAL_CSS
               .replace("CARD_ALPHA_TOKEN", f"{CARD_ALPHA:.2f}")
               .replace("BG_URI_TOKEN", BG_DATA_URI))
 
+
+def ensure_gspread_client():
+    if gspread is None:
+        return None, "gspread not installed in this environment."
+    try:
+        if SA_JSON_INLINE:
+            info = service_account.Credentials.from_service_account_info(
+                __import__("json").loads(SA_JSON_INLINE), scopes=SCOPES
+            )
+            return gspread.authorize(info), None
+        if SA_JSON_FILE and os.path.exists(SA_JSON_FILE):
+            creds = service_account.Credentials.from_service_account_file(SA_JSON_FILE, scopes=SCOPES)
+            return gspread.authorize(creds), None
+        return None, "No Google credentials provided."
+    except Exception as e:
+        return None, f"Credential error: {e}"
+
+def open_worksheet(gc):
+    if not SPREADSHEET_ID:
+        return None, "GSHEETS_SPREADSHEET_ID/SHEET_ID is not set."
+    try:
+        sh = gc.open_by_key(SPREADSHEET_ID)
+        try:
+            ws = sh.worksheet(WORKSHEET_NAME)
+        except Exception:
+            ws = sh.add_worksheet(WORKSHEET_NAME, rows=2000, cols=20)
+        return ws, None
+    except Exception as e:
+        return None, f"Open sheet error: {e}"
+
+def ensure_headers(ws):
+    try:
+        first_row = ws.row_values(1)
+        if not first_row:
+            ws.update("A1:H1", [HEADERS])
+    except Exception:
+        pass
+
+def append_result(ws, row_values):
+    try:
+        ws.append_row(row_values, value_input_option="USER_ENTERED")
+        return None
+    except Exception as e:
+        return str(e)
+
+def fetch_stats(ws):
+    try:
+        col = ws.col_values(8)[1:]
+        total = 0.0
+        jobs = 0
+        for v in col:
+            try:
+                total += float(v)
+                jobs += 1
+            except Exception:
+                continue
+        return total, jobs, None
+    except Exception as e:
+        return 0.0, 0, str(e)
+
+# ---------------- Shiny reactive state ----------------
+selected_index = reactive.Value(None)   # index into WHEEL_MULTS
+last_angle     = reactive.Value(0.0)
+spin_token     = reactive.Value(False)
+
+gs_status_msg  = reactive.Value("Not connected")
+agg_gold       = reactive.Value(0)
+agg_jobs       = reactive.Value(0)
+tier_idx       = reactive.Value(0)
+show_tiers     = reactive.Value(False)
+
+# ---------------- Assets ----------------
+LOGO_B64 = load_asset_b64("Logo.png")
+BG_B64   = load_asset_b64("backdrop.png")
+LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
+BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
+
 def kpi_gold_ui(total, cap, boost_pct):
     return ui.div(
         {"class":"kpi-card"},
@@ -377,7 +378,7 @@ def server(input, output, session):
         else:
             gs_status_msg.set("✅ Connected to Google Sheets")
             agg_gold.set(int(round(total))); agg_jobs.set(int(jobs))
-            tier = min(jobs // 5, 9); tier_idx.set(int(tier))
+            tier = min(jobs // 5, len(TIER_NAMES)-1); tier_idx.set(int(tier))
         return ws, None
 
     try:
@@ -388,7 +389,9 @@ def server(input, output, session):
     @output
     @render.ui
     def rep_kpi():
-        return kpi_rep_ui(agg_jobs.get(), tier_idx.get(), TIER_NAMES[tier_idx.get()])
+        idx = int(tier_idx.get())
+        name = TIER_NAMES[idx] if 0 <= idx < len(TIER_NAMES) else TIER_NAMES[-1]
+        return kpi_rep_ui(agg_jobs.get(), idx, name)
 
     @output
     @render.ui
@@ -414,7 +417,6 @@ def server(input, output, session):
     @reactive.event(input.spin)
     def _spin():
         n = len(WHEEL_MULTS)
-        import random
         idx = random.randrange(n)
         selected_index.set(idx)
         seg = 360 / n
@@ -454,7 +456,7 @@ def server(input, output, session):
             ui.div({"class":"kpi"}, f"Base from roll {roll}:  ", ui.tags.b(f"{base:.0f} gp")),
             ui.div({"class":"kpi"}, "Wheel multiplier:       ", ui.tags.b(f"×{mult:g}")),
             ui.div({"class":"kpi"}, "Narrative bonus:        ", ui.tags.b(f"+{int(flair*100)}%")),
-            ui.div({"class", f"Current cap (Tier {tier+1}): ", ui.tags.b(f"{cap} gp")),
+            ui.div({"class":"kpi"}, f"Current cap (Tier {tier+1}): ", ui.tags.b(f"{cap} gp")),
             ui.hr(),
             ui.div({"class":"total"}, f"Final award: {total} gp"),
         )
