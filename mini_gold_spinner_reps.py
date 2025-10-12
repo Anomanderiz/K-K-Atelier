@@ -157,7 +157,7 @@ show_tiers     = reactive.Value(False)
 
 # ---------------- Assets ----------------
 LOGO_B64 = load_asset_b64("Logo.png")
-BG_B64   = load_asset_b64("backdrop.png")
+BG_B64   = load_asset_b64("Backdrop.png")
 LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
 BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
@@ -175,33 +175,19 @@ GLOBAL_CSS = """
   --bs-card-color: var(--accent);
 }
 /* Default text is gold; the title uses --title */
-
-/* Force all main containers to be transparent so the image shows through */
-body, main, .container, .container-fluid, .row, .col, .navbar, header, nav, .shiny-plot-output, .shiny-html-output {
-  background: transparent !important;
-}
-
-/* Make Bootstrap layout wrappers transparent as well */
-#app, #shiny-body, #shiny-content, .bslib-page-fill, .page-wrapper {
-  background: transparent !important;
-}
-
-/* Put app content above scrim/backdrop just in case */
-.container, .grid, h2 { position: relative; z-index: 2; }
-
-html,body { background: transparent !important; color: var(--accent); font-size: 18px; height: 100%; }
+html,body { background: var(--major); color: var(--accent); font-size: 18px; height: 100%; }
 h2 { color: var(--title); }
 
 /* Real backdrop layer */
 #backdrop {
   position: fixed; inset: 0;
   background: url(BG_URI_TOKEN) center/cover no-repeat fixed;
-  z-index: 0;
+  z-index: -2;
 }
 #scrim {
   position: fixed; inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55));
-  z-index: 1;
+  z-index: -1;
 }
 
 .container { max-width: 1760px !important; min-height: 100vh; padding-bottom: 32px; }
@@ -328,9 +314,7 @@ app_ui = ui.page_fixed(
     ui.tags.div(id="scrim"),
     ui.h2(APP_TITLE),
     ui.div({"class":"grid"},
-        ui.div({"id":"rep","class":"card"}, ui.h4("Reputation"),
-               ui.output_ui("rep_kpi"),
-               ui.output_ui("tier_panel")),
+        ui.div({"id":"rep","class":"card"}, ui.output_ui("rep_kpi"), ui.output_ui("tier_panel")),
         ui.div({"id":"logo","class":"card"},
                ui.div({"class":"logo-box"},
                       ui.img(src=LOGO_DATA_URI or "", class_="logoimg")),
