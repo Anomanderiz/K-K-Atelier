@@ -1,5 +1,5 @@
 
-# K&K Atelier — Mini Gold Spinner (Wide+Tall UI, Backdrop Background)
+# Mini Gold Spinner — braces-safe build (fixes f-string '}' errors)
 from __future__ import annotations
 
 import os, io, math, random, base64, datetime as dt
@@ -8,7 +8,6 @@ from typing import List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 from shiny import App, ui, reactive, render
 
-# ----------------------- Optional Google Sheets deps -----------------------
 try:
     import gspread  # type: ignore
     from google.oauth2 import service_account  # type: ignore
@@ -17,12 +16,12 @@ except Exception:
 
 APP_TITLE = "K&K Atelier — Mini Gold Spinner"
 
-# ----------------------- Theme / palette -----------------------
-MAJOR_BG = "#301c2d"   # background
-TEXT_COL = "#eaebec"   # text
-ACCENT   = "#ecc791"   # accents & borders
+# Palette
+MAJOR_BG = "#301c2d"
+TEXT_COL = "#eaebec"
+ACCENT   = "#ecc791"
 
-# ----------------------- Game constants -----------------------
+# Game constants
 WHEEL_MULTS = [0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5]
 TIER_NAMES = [
     "Dusting Dabbler","Curtain–Cord Wrangler","Tapestry Tender","Chandelier Charmer",
@@ -32,16 +31,14 @@ TIER_NAMES = [
 BASE_CAP   = 250
 MIN_PAYOUT = 50
 
-# ---------------- Google Sheets config (supports legacy names) ----------------
+# Google Sheets config
 SPREADSHEET_ID = (os.getenv("GSHEETS_SPREADSHEET_ID") or os.getenv("SHEET_ID","")).strip()
 WORKSHEET_NAME = (os.getenv("GSHEETS_WORKSHEET") or os.getenv("WORKSHEET_NAME","Sheet1")).strip()
 SA_JSON_INLINE = (os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") or os.getenv("GCP_SA_JSON","")).strip()
 SA_JSON_FILE   = os.getenv("GOOGLE_APPLICATION_CREDENTIALS","").strip()
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
 
-# ---------------- Utility helpers ----------------
-def clamp(v, lo, hi):
-    return max(lo, min(hi, v))
+def clamp(v, lo, hi): return max(lo, min(hi, v))
 
 def roll_to_base_gold(roll: int) -> float:
     roll = clamp(int(roll), 1, 30)
@@ -83,7 +80,6 @@ def to_b64(img: Image.Image) -> str:
     img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
 
-# ---------------- Google Sheets helpers ----------------
 HEADERS = ["timestamp_iso","note","roll","base_gold","wheel_multiplier","narrative_pct","raw_total","final_award_gp"]
 
 def ensure_gspread_client():
@@ -145,7 +141,7 @@ def fetch_stats(ws) -> Tuple[float,int,Optional[str]]:
     except Exception as e:
         return 0.0, 0, str(e)
 
-# ---------------- Shiny reactive state ----------------
+# Reactive state
 selected_index = reactive.Value(None)   # type: ignore
 last_angle     = reactive.Value(0.0)
 spin_token     = reactive.Value(False)
@@ -156,94 +152,111 @@ agg_jobs       = reactive.Value(0)
 tier_idx       = reactive.Value(0)
 show_tiers     = reactive.Value(False)
 
-# ---------------- Assets ----------------
+# Assets
 LOGO_B64 = load_asset_b64("Logo.png")
 BG_B64   = load_asset_b64("Backdrop.png")
-LOGO_DATA_URI = f"data:image/png;base64,{LOGO_B64}" if LOGO_B64 else ""
-BG_DATA_URI   = f"data:image/png;base64,{BG_B64}" if BG_B64 else ""
+LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
+BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
-# ---------------- UI ----------------
-GLOBAL_CSS = f"""
+# --- CSS (no f-strings; token replacement to avoid brace hell) ---
+GLOBAL_CSS = """
 <style>
-:root{{ --major:{MAJOR_BG}; --text:{TEXT_COL}; --accent:{ACCENT}; }}
-html,body{{background:var(--major);color:var(--text); font-size:18px; height:100%;}}
+:root { --major:MAJOR_TOKEN; --text:TEXT_TOKEN; --accent:ACCENT_TOKEN; }
+html,body { background: var(--major); color: var(--text); font-size: 18px; height: 100%; }
+
 /* Backdrop sits behind the whole app */
-body::before{{ content:""; position:fixed; inset:0;
+body::before { content:""; position:fixed; inset:0;
   background:
     linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55)),
-    url({{BG_DATA_URI}}) center/cover no-repeat fixed;
-  opacity:1; z-index:-1;}}
+    url(BG_URI_TOKEN) center/cover no-repeat fixed;
+  opacity: 1; z-index: -1;
+}
 
-.container {{ max-width: 1760px !important; min-height: 100vh; padding-bottom: 32px;}}
+.container { max-width: 1760px !important; min-height: 100vh; padding-bottom: 32px; }
 
-*{{box-sizing:border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}}
-h2{{margin:0 0 22px 0; font-size:38px}}
-h3,h4{{margin:0 0 14px 0; font-size:20px}}
-.card{{background:rgba(34, 16, 30, 0.52);border:1px solid var(--accent);border-radius:22px; padding:20px;}}
+* { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
+h2 { margin: 0 0 22px 0; font-size: 38px }
+h3, h4 { margin: 0 0 14px 0; font-size: 20px }
+.card { background: rgba(34, 16, 30, 0.52); border: 1px solid var(--accent); border-radius: 22px; padding: 20px; }
 
-.grid{{display:grid; gap:24px;
+.grid {
+  display: grid; gap: 24px;
   grid-template-columns: 1.2fr 0.9fr 1fr;
   grid-template-rows: minmax(220px, 1fr) minmax(520px, 1fr);
   grid-template-areas:
     "rep logo gold"
     "roll wheel payout";
-  align-items:stretch;
-  height: calc(100vh - 160px);  /* Fill vertical space under the title */
-  min-height: 760px;}
+  align-items: stretch;
+  height: calc(100vh - 160px);
+  min-height: 760px;
+}
 
-#rep{{grid-area:rep; position:relative;}}
-#logo{{grid-area:logo;}}
-#gold{{grid-area:gold;}}
-#roll{{grid-area:roll;}}
-#wheelcard{{grid-area:wheel;}}
-#payout{{grid-area:payout;}}
+#rep { grid-area: rep; position: relative; }
+#logo { grid-area: logo; }
+#gold { grid-area: gold; }
+#roll { grid-area: roll; }
+#wheelcard { grid-area: wheel; }
+#payout { grid-area: payout; }
 
-.kpi-title{{font-size:15px;opacity:.95;letter-spacing:.3px}}
-.kpi-number{{font-size:30px;font-weight:800;color:var(--accent);}}
-.kpi-sub{{font-size:14px;opacity:.92}}
-.kpi-card{{border:1px solid var(--accent);border-radius:18px;padding:16px 18px;
+.kpi-title { font-size: 15px; opacity: .95; letter-spacing: .3px }
+.kpi-number { font-size: 30px; font-weight: 800; color: var(--accent); }
+.kpi-sub { font-size: 14px; opacity: .92 }
+.kpi-card {
+  border:1px solid var(--accent); border-radius:18px; padding:16px 18px;
   background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  box-shadow:0 14px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);}}
-.kpi-click{{cursor:pointer;}}
-.logoimg{{height:160px;width:auto;display:block;margin:0 auto;filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));}}
+  box-shadow:0 14px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.kpi-click { cursor: pointer; }
+.logoimg { height: 160px; width: auto; display: block; margin: 0 auto; filter: drop-shadow(0 8px 18px rgba(0,0,0,.35)); }
 
-.form-range, input[type=range] {{ width: 100%; }}
-input, .btn, .form-control {{ font-size: 16px; }}
+.form-range, input[type=range] { width: 100%; }
+input, .btn, .form-control { font-size: 16px; }
 
 /* Make wheel scale to viewport height */
-#wheel-wrap{{position:relative; width:min(95vh, 1100px); margin:0 auto; aspect-ratio:1/1;}}
-#wheel-img, #spin-target{{width:100%; height:100%; border-radius:50%; box-shadow:0 14px 44px rgba(0,0,0,.55);}}
-#pointer{{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
-  width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;
-  border-bottom:34px solid var(--accent);filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));}}
-.spin-btn{{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  min-width:160px;height:160px;border-radius:88px;border:1px solid var(--accent);
-  background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  color:var(--text);font-weight:900;letter-spacing:.4px; font-size:20px;
-  box-shadow:0 12px 36px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);}}
-@keyframes wheelspin{{from{{transform:rotate(0deg);}}to{{transform:rotate(var(--spin-deg,1440deg));}}}}
-#spin-target.spinning{{animation:wheelspin 3.0s cubic-bezier(.17,.67,.32,1.35);}}
+#wheel-wrap { position: relative; width: min(95vh, 1100px); margin: 0 auto; aspect-ratio: 1 / 1; }
+#wheel-img, #spin-target { width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 14px 44px rgba(0,0,0,.55); }
+#pointer {
+  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 20px solid transparent; border-right: 20px solid transparent;
+  border-bottom: 34px solid var(--accent); filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));
+}
+.spin-btn {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  min-width: 160px; height: 160px; border-radius: 88px; border: 1px solid var(--accent);
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+  color: var(--text); font-weight: 900; letter-spacing: .4px; font-size: 20px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+}
+@keyframes wheelspin { from { transform: rotate(0deg); } to { transform: rotate(var(--spin-deg, 1440deg)); } }
+#spin-target.spinning { animation: wheelspin 3.0s cubic-bezier(.17,.67,.32,1.35); }
 
-#tiers-overlay{{position:absolute; top:12px; right:-12px; width:360px; z-index:3; display:none;}}
-#tiers-overlay.show{{display:block;}}
-.tierlist{{display:grid;grid-template-columns:1fr;gap:10px}}
-.tier{{border:1px solid var(--accent);border-radius:14px;padding:12px 14px;background:rgba(255,255,255,.08);}}
-.tier.current{{outline:2px solid var(--accent);}}
-.tier .name{{font-weight:800;color:var(--accent); font-size:16px}}
-.tier .desc{{font-size:13px;opacity:.95}}
+#tiers-overlay { position: absolute; top: 12px; right: -12px; width: 360px; z-index: 3; display: none; }
+#tiers-overlay.show { display: block; }
+.tierlist { display: grid; grid-template-columns: 1fr; gap: 10px }
+.tier { border:1px solid var(--accent); border-radius:14px; padding:12px 14px; background: rgba(255,255,255,.08); }
+.tier.current { outline: 2px solid var(--accent); }
+.tier .name { font-weight: 800; color: var(--accent); font-size: 16px }
+.tier .desc { font-size: 13px; opacity: .95 }
 
-.kpi b{{color:var(--accent)}} .total{{font-size:34px;font-weight:900;color:var(--accent);}}
+.kpi b { color: var(--accent) } .total { font-size: 34px; font-weight: 900; color: var(--accent); }
 
-@media (max-width: 1200px) {{
-  .grid{{grid-template-columns: 1fr; grid-template-rows: auto auto auto auto auto auto;
-    grid-template-areas:
-    "logo" "gold" "rep" "wheel" "roll" "payout";
-    height: auto; min-height: 0;}}
-  #tiers-overlay{{position:static; width:auto; display:block; margin-top:10px;}}
-  #wheel-wrap{{ width: min(80vw, 90vh); }}
-}}
+@media (max-width: 1200px) {
+  .grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto auto auto;
+    grid-template-areas: "logo" "gold" "rep" "wheel" "roll" "payout";
+    height: auto; min-height: 0;
+  }
+  #tiers-overlay { position: static; width: auto; display: block; margin-top: 10px; }
+  #wheel-wrap { width: min(80vw, 90vh); }
+}
 </style>
 """
+GLOBAL_CSS = (GLOBAL_CSS
+              .replace("MAJOR_TOKEN", MAJOR_BG)
+              .replace("TEXT_TOKEN", TEXT_COL)
+              .replace("ACCENT_TOKEN", ACCENT)
+              .replace("BG_URI_TOKEN", BG_DATA_URI))
 
 def kpi_gold_ui(total:int, cap:int, boost_pct:int):
     return ui.input_action_button(
@@ -275,8 +288,8 @@ app_ui = ui.page_fixed(
                ui.output_ui("rep_kpi"),
                ui.div({"id":"tiers-overlay","class":"card"}, ui.output_ui("tier_panel"))),
         ui.div({"id":"logo","class":"card"},
-               ui.img(src=(f"data:image/png;base64,{LOGO_B64}") if LOGO_B64 else "", class_="logoimg"),
-               ui.div({"class":"kpi-sub"}, "Tip: ensure ./assets/Logo.png exists in the repo.") if not LOGO_B64 else None),
+               ui.img(src=LOGO_DATA_URI or "", class_="logoimg"),
+               ui.div({"class":"kpi-sub"}, "Tip: ensure ./assets/Logo.png exists in the repo.") if not LOGO_DATA_URI else None),
         ui.div({"id":"gold","class":"card"}, ui.output_ui("gold_kpi")),
         ui.div({"id":"roll","class":"card"},
             ui.h4("Rolls and Flair"),
@@ -325,7 +338,6 @@ def server(input, output, session):
             tier = min(jobs // 5, 9); tier_idx.set(int(tier))
         return ws, None
 
-    # On startup, try to connect (if creds are present)
     try:
         refresh_stats()
     except Exception:
