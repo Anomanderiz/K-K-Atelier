@@ -1,5 +1,5 @@
 
-# Mini Gold Spinner — fixed backdrop, editable colors, contained tiers, logo fills
+# Mini Gold Spinner — all-gold text in cards, fixed backdrop, editable palette
 from __future__ import annotations
 
 import os, io, math, random, base64, datetime as dt
@@ -10,9 +10,9 @@ from shiny import App, ui, reactive, render
 
 # ----------------------- Quick color palette (edit here) -----------------------
 ACCENT   = "#ecc791"   # Gold: default text, buttons, outlines
-TEXT_COL = "#eaebec"   # App title color only
+TITLE_COL= "#eaebec"   # App title color only
 MAJOR_BG = "#301c2d"   # Page background behind the backdrop
-CARD_ALPHA = 0.52      # Card background opacity (0..1), tweak for contrast
+CARD_ALPHA = 0.52      # Card background opacity (0..1)
 
 # ----------------------- Optional Google Sheets deps -----------------------
 try:
@@ -162,26 +162,28 @@ LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
 BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
 # ---------------- UI ----------------
-# We avoid f-string braces in CSS by token replacement.
+# CSS via token replacement (no f-strings in CSS)
 GLOBAL_CSS = """
 <style>
 :root {
   --major:MAJOR_TOKEN;
-  --title:TEXT_TOKEN;
+  --title:TITLE_TOKEN;
   --accent:ACCENT_TOKEN;
   --card-alpha:CARD_ALPHA_TOKEN;
+  /* Overwrite Bootstrap text variables to prevent grey */
+  --bs-body-color: var(--accent);
+  --bs-card-color: var(--accent);
 }
-/* Default text across the app is gold; the title uses --title */
+/* Default text is gold; the title uses --title */
 html,body { background: var(--major); color: var(--accent); font-size: 18px; height: 100%; }
 h2 { color: var(--title); }
 
-/* Real backdrop layer under everything (reliable across browsers) */
+/* Real backdrop layer */
 #backdrop {
   position: fixed; inset: 0;
   background: url(BG_URI_TOKEN) center/cover no-repeat fixed;
   z-index: -2;
 }
-/* Optional scrim for contrast (toggle opacity by changing rgba alpha) */
 #scrim {
   position: fixed; inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55));
@@ -192,17 +194,20 @@ h2 { color: var(--title); }
 
 * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
 h2 { margin: 0 0 22px 0; font-size: 38px }
-h3, h4 { margin: 0 0 14px 0; font-size: 20px }
+h3, h4 { margin: 0 0 14px 0; font-size: 20px; color: var(--accent); }
 
 .card {
   background: rgba(34, 16, 30, var(--card-alpha));
   border: 1px solid var(--accent); border-radius: 22px; padding: 20px;
+  color: var(--accent);
 }
+/* Belt-and-braces: force all descendants inside cards to gold */
+.card * { color: var(--accent); }
 
 .grid {
   display: grid; gap: 24px;
   grid-template-columns: 1.2fr 0.9fr 1fr;
-  grid-template-rows: auto 1fr;              /* <-- top row grows with reputation */
+  grid-template-rows: auto 1fr;
   grid-template-areas:
     "rep logo gold"
     "roll wheel payout";
@@ -236,7 +241,7 @@ input, .form-control, .btn { color: var(--accent); background-color: rgba(0,0,0,
 .form-check-input { border-color: var(--accent); }
 .form-check-input:checked { background-color: var(--accent); }
 
-/* Wheel is fully contained in its card */
+/* Wheel contained */
 #wheel-wrap { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1 / 1; }
 #wheel-img, #spin-target { width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 14px 44px rgba(0,0,0,.55); }
 #pointer {
@@ -254,13 +259,13 @@ input, .form-control, .btn { color: var(--accent); background-color: rgba(0,0,0,
 @keyframes wheelspin { from { transform: rotate(0deg); } to { transform: rotate(var(--spin-deg, 1440deg)); } }
 #spin-target.spinning { animation: wheelspin 3.0s cubic-bezier(.17,.67,.32,1.35); }
 
-/* Tiers render inline; the Rep card grows and pushes the grid row down */
+/* Tiers inside Reputation card */
 #tiers-panel { margin-top: 4px; }
 .tierlist { display: grid; grid-template-columns: 1fr; gap: 10px }
 .tier { border:1px solid var(--accent); border-radius:14px; padding:12px 14px; background: rgba(255,255,255,.08); }
 .tier.current { outline: 2px solid var(--accent); }
-.tier .name { font-weight: 800; font-size: 16px }
-.tier .desc { font-size: 13px; opacity: .98 }
+.tier .name { font-weight: 800; font-size: 16px; color: var(--accent); }
+.tier .desc { font-size: 13px; color: var(--accent); opacity: 1; }
 
 .total { font-size: 34px; font-weight: 900; color: var(--accent); }
 
@@ -276,7 +281,7 @@ input, .form-control, .btn { color: var(--accent); background-color: rgba(0,0,0,
 """
 GLOBAL_CSS = (GLOBAL_CSS
               .replace("MAJOR_TOKEN", MAJOR_BG)
-              .replace("TEXT_TOKEN", TEXT_COL)
+              .replace("TITLE_TOKEN", TITLE_COL)
               .replace("ACCENT_TOKEN", ACCENT)
               .replace("CARD_ALPHA_TOKEN", f"{CARD_ALPHA:.2f}")
               .replace("BG_URI_TOKEN", BG_DATA_URI))
@@ -292,7 +297,6 @@ def kpi_gold_ui(total:int, cap:int, boost_pct:int):
     )
 
 def kpi_rep_ui(jobs:int, tier:int, name:str):
-    # Reputation acts as the toggle
     human = tier + 1
     return ui.input_action_button(
         "toggle_tiers",
@@ -306,7 +310,6 @@ def kpi_rep_ui(jobs:int, tier:int, name:str):
 
 app_ui = ui.page_fixed(
     ui.head_content(ui.HTML(GLOBAL_CSS)),
-    # Ensure the backdrop layers are present in the DOM
     ui.tags.div(id="backdrop"),
     ui.tags.div(id="scrim"),
     ui.h2(APP_TITLE),
@@ -465,7 +468,7 @@ def server(input, output, session):
     @render.ui
     def tier_panel():
         if not show_tiers.get():
-            return ui.HTML("")  # nothing when collapsed
+            return ui.HTML("")
         jobs = agg_jobs.get()
         curr = tier_idx.get()
         items = []
@@ -477,6 +480,6 @@ def server(input, output, session):
                 ui.div({"class":"name"}, f"Tier {i+1} — {name}"),
                 ui.div({"class":"desc"}, f"+{i*10}% cap • {desc}")
             ))
-        return ui.div({"id":"tiers-panel","class":""}, ui.div({"class":"tierlist"}, *items))
+        return ui.div({"id":"tiers-panel"}, ui.div({"class":"tierlist"}, *items))
 
 app = App(app_ui, server)
