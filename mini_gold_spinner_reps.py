@@ -175,19 +175,30 @@ GLOBAL_CSS = """
   --bs-card-color: var(--accent);
 }
 /* Default text is gold; the title uses --title */
-html,body { background: var(--major); color: var(--accent); font-size: 18px; height: 100%; }
+
+/* Force transparency on all common layout wrappers so backdrop is visible */
+body, main, .container, .container-fluid, .row, .col, header, nav, footer, .navbar, .page-wrapper, .bslib-page-fill {
+  background: transparent !important;
+}
+#app, #shiny-body, #shiny-content, #shinylive-apps, .grid {
+  background: transparent !important;
+}
+/* Ensure content sits above backdrop/scrim */
+.grid, .card, h2 { position: relative; z-index: 2; }
+
+html,body { background: transparent !important; color: var(--accent); font-size: 18px; height: 100%; }
 h2 { color: var(--title); }
 
 /* Real backdrop layer */
 #backdrop {
   position: fixed; inset: 0;
   background: url(BG_URI_TOKEN) center/cover no-repeat fixed;
-  z-index: -2;
+  z-index: 0;
 }
 #scrim {
   position: fixed; inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55));
-  z-index: -1;
+  z-index: 1;
 }
 
 .container { max-width: 1760px !important; min-height: 100vh; padding-bottom: 32px; }
