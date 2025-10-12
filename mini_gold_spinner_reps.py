@@ -17,7 +17,7 @@ try:
 except Exception:
     gspread = None  # type: ignore
 
-APP_TITLE = "K&K Atelier — Mini Gold Spinner"
+APP_TITLE = "K&K Atelier — Bespoke Interiors"
 
 # ---------------- Game constants ----------------
 WHEEL_MULTS = [0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5]
