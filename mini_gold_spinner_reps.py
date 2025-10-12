@@ -1,5 +1,5 @@
 
-# K&K Atelier — Mini Gold Spinner (Sheets + Logo + Reputation + Grid Layout)
+# K&K Atelier — Mini Gold Spinner (Wide UI + Assets Loader)
 from __future__ import annotations
 
 import os, io, math, random, base64, datetime as dt
@@ -18,21 +18,17 @@ except Exception:
 APP_TITLE = "K&K Atelier — Mini Gold Spinner"
 
 # ----------------------- Theme / palette -----------------------
-MAJOR_BG = "#301c2d"   # major
-TEXT_COL = "#eaebec"   # minor & text
-ACCENT   = "#ecc791"   # accents & button borders
+MAJOR_BG = "#301c2d"   # background
+TEXT_COL = "#eaebec"   # text
+ACCENT   = "#ecc791"   # accents & borders
 
 # ----------------------- Game constants -----------------------
-# Wheel multipliers
 WHEEL_MULTS = [0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5]
-
-# Reputation tiers
 TIER_NAMES = [
     "Dusting Dabbler","Curtain–Cord Wrangler","Tapestry Tender","Chandelier Charmer",
     "Parlour Perfectionist","Gilded Guilder","Salon Savant","Waterdhavian Tastemaker",
     "Noble–House Laureate","Master of Makeovers"
 ]
-
 BASE_CAP   = 250
 MIN_PAYOUT = 50
 
@@ -41,7 +37,6 @@ SPREADSHEET_ID = (os.getenv("GSHEETS_SPREADSHEET_ID") or os.getenv("SHEET_ID",""
 WORKSHEET_NAME = (os.getenv("GSHEETS_WORKSHEET") or os.getenv("WORKSHEET_NAME","Sheet1")).strip()
 SA_JSON_INLINE = (os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") or os.getenv("GCP_SA_JSON","")).strip()
 SA_JSON_FILE   = os.getenv("GOOGLE_APPLICATION_CREDENTIALS","").strip()
-
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
 
 # ---------------- Utility helpers ----------------
@@ -52,7 +47,18 @@ def roll_to_base_gold(roll: int) -> float:
     roll = clamp(int(roll), 1, 30)
     return 50.0 + (roll - 1) * 100.0 / 29.0  # 50–150
 
-def draw_wheel(labels: List[str], size: int = 560):
+def load_asset_b64(name: str) -> str:
+    """
+    Tries to load ./assets/<name>. Returns base64 string or '' if missing.
+    """
+    here = os.path.dirname(__file__)
+    path = os.path.join(here, "assets", name)
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return ""
+
+def draw_wheel(labels: List[str], size: int = 820):
     n = len(labels)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -63,15 +69,15 @@ def draw_wheel(labels: List[str], size: int = 560):
         end   = 360 * (i + 1) / n - 90
         d.pieslice([cx - r, cy - r, cx + r, cy + r], start, end,
                    fill=palette[i % len(palette)], outline="#2a1627")
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=ACCENT, width=5)
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=ACCENT, width=6)
     try:
-        font = ImageFont.truetype("DejaVuSans.ttf", 16)
+        font = ImageFont.truetype("DejaVuSans.ttf", 20)
     except Exception:
         font = ImageFont.load_default()
     for i, lab in enumerate(labels):
         ang = math.radians(360 * (i + 0.5) / n - 90)
-        tx = cx + int((r - 64) * math.cos(ang))
-        ty = cy + int((r - 64) * math.sin(ang))
+        tx = cx + int((r - 92) * math.cos(ang))
+        ty = cy + int((r - 92) * math.sin(ang))
         d.text((tx, ty), lab, fill=TEXT_COL, font=font, anchor="mm")
     return img
 
@@ -129,7 +135,6 @@ def append_result(ws, row_values: List) -> Optional[str]:
 
 def fetch_stats(ws) -> Tuple[float,int,Optional[str]]:
     try:
-        # final_award_gp is column 8
         col = ws.col_values(8)[1:]
         total = 0.0
         jobs = 0
@@ -154,27 +159,30 @@ agg_jobs       = reactive.Value(0)
 tier_idx       = reactive.Value(0)
 show_tiers     = reactive.Value(False)
 
-# ---------------- UI ----------------
-LOGO_DATA_URI = "data:image/png;base64,"  # Put your base64 logo after the comma
-BG_DATA_URI   = "data:image/png;base64,"  # Put your base64 background after the comma
+# ---------------- Assets ----------------
+LOGO_B64 = load_asset_b64("Logo.png")
+BG_B64   = load_asset_b64("Backdrop.png")
+LOGO_DATA_URI = f"data:image/png;base64,{LOGO_B64}" if LOGO_B64 else ""
+BG_DATA_URI   = f"data:image/png;base64,{BG_B64}" if BG_B64 else ""
 
+# ---------------- UI ----------------
 GLOBAL_CSS = f"""
 <style>
 :root{{ --major:{MAJOR_BG}; --text:{TEXT_COL}; --accent:{ACCENT}; }}
-html,body{{background:var(--major);color:var(--text);}}
-body::before{{ content:""; position:fixed; inset:0;
-  background: url({{BG_DATA_URI}}) center/cover no-repeat fixed; opacity:.18; z-index:-1;}}
+html,body{{background:var(--major);color:var(--text); font-size:17px;}}
+.container {{ max-width: 1600px !important; }}
+body::before{{ content:""; position:fixed; inset:0; background: url({{BG_DATA_URI}}) center/cover no-repeat fixed; opacity:.22; z-index:-1;}}
 
 *{{box-sizing:border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}}
-h2,h3,h4{{margin:0 0 8px 0}}
-.card{{background:rgba(255,255,255,0.06);border:1px solid var(--accent);border-radius:18px; padding:14px;}}
-
-.grid{{display:grid; gap:16px;
-  grid-template-columns: 1.2fr .8fr .9fr;
+h2{{margin:0 0 18px 0; font-size:34px}}
+h3,h4{{margin:0 0 12px 0;}}
+.card{{background:rgba(255,255,255,0.06);border:1px solid var(--accent);border-radius:20px; padding:18px;}}
+.grid{{display:grid; gap:22px;
+  grid-template-columns: 1.3fr 1fr 1.1fr;
   grid-template-areas:
     "rep logo gold"
     "roll wheel payout";
-  align-items:stretch;}}
+  align-items:stretch; min-height: 680px;}}
 #rep{{grid-area:rep; position:relative;}}
 #logo{{grid-area:logo;}}
 #gold{{grid-area:gold;}}
@@ -182,39 +190,42 @@ h2,h3,h4{{margin:0 0 8px 0}}
 #wheelcard{{grid-area:wheel;}}
 #payout{{grid-area:payout;}}
 
-.kpi-title{{font-size:12px;opacity:.85;letter-spacing:.3px}}
-.kpi-number{{font-size:22px;font-weight:800;color:var(--accent);}}
-.kpi-sub{{font-size:12px;opacity:.85}}
-.kpi-card{{border:1px solid var(--accent);border-radius:14px;padding:12px 14px;
+.kpi-title{{font-size:14px;opacity:.9;letter-spacing:.3px}}
+.kpi-number{{font-size:28px;font-weight:800;color:var(--accent);}}
+.kpi-sub{{font-size:14px;opacity:.9}}
+.kpi-card{{border:1px solid var(--accent);border-radius:16px;padding:14px 16px;
   background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);}}
+  box-shadow:0 14px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);}}
 .kpi-click{{cursor:pointer;}}
-.logoimg{{height:96px;width:auto;display:block;margin:0 auto;filter: drop-shadow(0 6px 14px rgba(0,0,0,.35));}}
+.logoimg{{height:140px;width:auto;display:block;margin:0 auto;filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));}}
 
-#wheel-wrap{{position:relative; width:100%; max-width:640px; margin:0 auto; aspect-ratio:1/1;}}
-#wheel-img, #spin-target{{width:100%; height:100%; border-radius:50%; box-shadow:0 12px 36px rgba(0,0,0,.55);}}
-#pointer{{position:absolute;top:-8px;left:50%;transform:translateX(-50%);
-  width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;
-  border-bottom:26px solid var(--accent);filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));}}
+.form-range, input[type=range] {{ width: 100%; }}
+input, .btn, .form-control {{ font-size: 16px; }}
+
+#wheel-wrap{{position:relative; width:100%; max-width:880px; margin:0 auto; aspect-ratio:1/1;}}
+#wheel-img, #spin-target{{width:100%; height:100%; border-radius:50%; box-shadow:0 14px 44px rgba(0,0,0,.55);}}
+#pointer{{position:absolute;top:-10px;left:50%;transform:translateX(-50%);
+  width:0;height:0;border-left:18px solid transparent;border-right:18px solid transparent;
+  border-bottom:30px solid var(--accent);filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));}}
 .spin-btn{{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  min-width:120px;height:120px;border-radius:60px;border:1px solid var(--accent);
+  min-width:150px;height:150px;border-radius:80px;border:1px solid var(--accent);
   background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  color:var(--text);font-weight:700;letter-spacing:.4px;
-  box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);}}
+  color:var(--text);font-weight:800;letter-spacing:.4px; font-size:18px;
+  box-shadow:0 12px 36px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);}}
 @keyframes wheelspin{{from{{transform:rotate(0deg);}}to{{transform:rotate(var(--spin-deg,1440deg));}}}}
 #spin-target.spinning{{animation:wheelspin 3.0s cubic-bezier(.17,.67,.32,1.35);}}
 
-#tiers-overlay{{position:absolute; top:12px; right:-12px; width:280px; z-index:3; display:none;}}
+#tiers-overlay{{position:absolute; top:12px; right:-12px; width:340px; z-index:3; display:none;}}
 #tiers-overlay.show{{display:block;}}
-.tierlist{{display:grid;grid-template-columns:1fr;gap:8px}}
-.tier{{border:1px solid var(--accent);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.08);}}
+.tierlist{{display:grid;grid-template-columns:1fr;gap:10px}}
+.tier{{border:1px solid var(--accent);border-radius:14px;padding:12px 14px;background:rgba(255,255,255,.08);}}
 .tier.current{{outline:2px solid var(--accent);}}
-.tier .name{{font-weight:700;color:var(--accent)}}
-.tier .desc{{font-size:12px;opacity:.9}}
+.tier .name{{font-weight:800;color:var(--accent); font-size:16px}}
+.tier .desc{{font-size:13px;opacity:.95}}
 
-.kpi b{{color:var(--accent)}} .total{{font-size:28px;font-weight:800;color:var(--accent);}}
+.kpi b{{color:var(--accent)}} .total{{font-size:32px;font-weight:900;color:var(--accent);}}
 
-@media (max-width: 1100px) {{
+@media (max-width: 1200px) {{
   .grid{{grid-template-columns: 1fr; grid-template-areas:
     "logo" "gold" "rep" "wheel" "roll" "payout"; }}
   #tiers-overlay{{position:static; width:auto; display:block; margin-top:10px;}}
@@ -244,14 +255,16 @@ def kpi_rep_ui(jobs:int, tier:int, name:str):
         )
     )
 
-app_ui = ui.page_fixed(
+app_ui = ui.page_fixed(  # keep fixed for margins; expand via CSS .container width
     ui.head_content(ui.HTML(GLOBAL_CSS)),
     ui.h2(APP_TITLE),
     ui.div({"class":"grid"},
         ui.div({"id":"rep","class":"card"}, ui.h4("Reputation"),
                ui.output_ui("rep_kpi"),
                ui.div({"id":"tiers-overlay","class":"card"}, ui.output_ui("tier_panel"))),
-        ui.div({"id":"logo","class":"card"}, ui.img(src=LOGO_DATA_URI, class_="logoimg")),
+        ui.div({"id":"logo","class":"card"},
+               ui.img(src=LOGO_DATA_URI or "", class_="logoimg"),
+               ui.div({"class":"kpi-sub"}, "Tip: ensure ./assets/Logo.png exists in the repo.") if not LOGO_DATA_URI else None),
         ui.div({"id":"gold","class":"card"}, ui.output_ui("gold_kpi")),
         ui.div({"id":"roll","class":"card"},
             ui.h4("Rolls and Flair"),
@@ -276,7 +289,7 @@ app_ui = ui.page_fixed(
 
 def server(input, output, session):
     labels = [f"×{m:g}" for m in WHEEL_MULTS]
-    wheel_b64 = to_b64(draw_wheel(labels, size=560))
+    wheel_b64 = to_b64(draw_wheel(labels, size=820))
 
     def refresh_stats():
         if gspread is None:
@@ -301,7 +314,10 @@ def server(input, output, session):
         return ws, None
 
     # On startup, try to connect (if creds are present)
-    ws_cache, _ = refresh_stats()
+    try:
+        refresh_stats()
+    except Exception:
+        pass
 
     @output
     @render.ui
@@ -314,7 +330,7 @@ def server(input, output, session):
         angle = last_angle.get()
         spinning = "spinning" if spin_token.get() else ""
         return ui.div({"id":"wheel-wrap"},
-            ui.div({"id":"pointer"}),
+            ui.div({"id":"pointer"}),  # purely decorative pointer
             ui.img(id="wheel-img", src=f"data:image/png;base64,{wheel_b64}"),
             ui.div(
                 ui.img(
@@ -340,7 +356,6 @@ def server(input, output, session):
         spin_token.set(True)
 
     def narrative_bonus_pct() -> float:
-        # treat as mutually exclusive — take the highest selected
         bonuses = []
         if input.flair_pass():
             bonuses.append(0.10)
@@ -353,7 +368,7 @@ def server(input, output, session):
     def compute_payout():
         roll = int(input.roll())
         base = roll_to_base_gold(roll)
-        idx  = selected_index.get() if selected_index.get() is not None else 2  # default to 1.0 multiplier
+        idx  = selected_index.get() if selected_index.get() is not None else 2  # default 1.0x
         mult = WHEEL_MULTS[int(idx)]
         flair = narrative_bonus_pct()
         raw = base * mult * (1.0 + flair)
