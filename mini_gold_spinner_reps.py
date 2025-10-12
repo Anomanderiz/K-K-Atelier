@@ -1,5 +1,4 @@
-
-# Mini Gold Spinner — glass UI, real backdrop, editable palette (v7)
+# Mini Gold Spinner — glass UI, real backdrop, editable palette (v7b: BG_DATA_URI order fix)
 import os, io, math, random, base64, datetime as dt
 
 from PIL import Image, ImageDraw, ImageFont
@@ -34,13 +33,7 @@ MIN_PAYOUT = 50
 def tier_bonus_pct(tier, total_tiers=len(TIER_NAMES)):
     return 100 if tier >= (total_tiers - 1) else tier * 10
 
-# ---------------- Google Sheets config ----------------
-SPREADSHEET_ID = (os.getenv("GSHEETS_SPREADSHEET_ID") or os.getenv("SHEET_ID","")).strip()
-WORKSHEET_NAME = (os.getenv("GSHEETS_WORKSHEET") or os.getenv("WORKSHEET_NAME","Sheet1")).strip()
-SA_JSON_INLINE = (os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") or os.getenv("GCP_SA_JSON","")).strip()
-SA_JSON_FILE   = os.getenv("GOOGLE_APPLICATION_CREDENTIALS","").strip()
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-
+# ---------------- Utility ----------------
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
@@ -86,8 +79,14 @@ def to_b64(img):
 
 HEADERS = ["timestamp_iso","note","roll","base_gold","wheel_multiplier","narrative_pct","raw_total","final_award_gp"]
 
+# ---------------- Assets (define before CSS) ----------------
+LOGO_B64 = load_asset_b64("Logo.png")
+BG_B64   = load_asset_b64("backdrop.png")
+LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
+BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
-GLOBAL_CSS = """
+# ---------------- CSS Template then substitution ----------------
+GLOBAL_CSS_TEMPLATE = """
 <style>
 :root {
   --major:MAJOR_TOKEN;
@@ -216,13 +215,30 @@ input, .form-control, .btn { color: var(--accent); background-color: rgba(0,0,0,
 }
 </style>
 """
-GLOBAL_CSS = (GLOBAL_CSS
+GLOBAL_CSS = (GLOBAL_CSS_TEMPLATE
               .replace("MAJOR_TOKEN", MAJOR_BG)
               .replace("TITLE_TOKEN", TITLE_COL)
               .replace("ACCENT_TOKEN", ACCENT)
               .replace("CARD_ALPHA_TOKEN", f"{CARD_ALPHA:.2f}")
               .replace("BG_URI_TOKEN", BG_DATA_URI))
 
+# ---------------- Google Sheets config (after CSS ok) ----------------
+SPREADSHEET_ID = (os.getenv("GSHEETS_SPREADSHEET_ID") or os.getenv("SHEET_ID","")).strip()
+WORKSHEET_NAME = (os.getenv("GSHEETS_WORKSHEET") or os.getenv("WORKSHEET_NAME","Sheet1")).strip()
+SA_JSON_INLINE = (os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") or os.getenv("GCP_SA_JSON","")).strip()
+SA_JSON_FILE   = os.getenv("GOOGLE_APPLICATION_CREDENTIALS","").strip()
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+
+# ---------------- Shiny reactive state ----------------
+selected_index = reactive.Value(None)   # index into WHEEL_MULTS
+last_angle     = reactive.Value(0.0)
+spin_token     = reactive.Value(False)
+
+gs_status_msg  = reactive.Value("Not connected")
+agg_gold       = reactive.Value(0)
+agg_jobs       = reactive.Value(0)
+tier_idx       = reactive.Value(0)
+show_tiers     = reactive.Value(False)
 
 def ensure_gspread_client():
     if gspread is None:
@@ -283,23 +299,6 @@ def fetch_stats(ws):
     except Exception as e:
         return 0.0, 0, str(e)
 
-# ---------------- Shiny reactive state ----------------
-selected_index = reactive.Value(None)   # index into WHEEL_MULTS
-last_angle     = reactive.Value(0.0)
-spin_token     = reactive.Value(False)
-
-gs_status_msg  = reactive.Value("Not connected")
-agg_gold       = reactive.Value(0)
-agg_jobs       = reactive.Value(0)
-tier_idx       = reactive.Value(0)
-show_tiers     = reactive.Value(False)
-
-# ---------------- Assets ----------------
-LOGO_B64 = load_asset_b64("Logo.png")
-BG_B64   = load_asset_b64("backdrop.png")
-LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
-BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
-
 def kpi_gold_ui(total, cap, boost_pct):
     return ui.div(
         {"class":"kpi-card"},
@@ -322,6 +321,7 @@ def kpi_rep_ui(jobs, tier, name):
         class_="kpi-card kpi-click"
     )
 
+# ---------------- App UI ----------------
 app_ui = ui.page_fixed(
     ui.head_content(ui.HTML(GLOBAL_CSS)),
     ui.tags.div(id="backdrop"),
@@ -355,6 +355,7 @@ app_ui = ui.page_fixed(
     title=APP_TITLE
 )
 
+# ---------------- Server ----------------
 def server(input, output, session):
     labels = [f"×{m:g}" for m in WHEEL_MULTS]
     wheel_b64 = to_b64(draw_wheel(labels, size=980))
@@ -497,4 +498,5 @@ def server(input, output, session):
             ))
         return ui.div({"id":"tiers-panel"}, ui.div({"class":"tierlist"}, *items))
 
+# ---------------- App ----------------
 app = App(app_ui, server)
