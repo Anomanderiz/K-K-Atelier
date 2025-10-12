@@ -179,7 +179,7 @@ body::before { content:""; position:fixed; inset:0;
 * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
 h2 { margin: 0 0 22px 0; font-size: 38px }
 h3, h4 { margin: 0 0 14px 0; font-size: 20px }
-.card { background: rgba(34, 16, 30, 0.52); border: 1px solid var(--accent); border-radius: 22px; padding: 20px; }
+.card { background: rgba(236, 199, 145, 1); border: 1px solid var(--accent); border-radius: 22px; padding: 20px; }
 
 .grid {
   display: grid; gap: 24px;
