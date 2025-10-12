@@ -157,7 +157,7 @@ show_tiers     = reactive.Value(False)
 
 # ---------------- Assets ----------------
 LOGO_B64 = load_asset_b64("Logo.png")
-BG_B64   = load_asset_b64("Backdrop.png")
+BG_B64   = load_asset_b64("backdrop.png")
 LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
 BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
