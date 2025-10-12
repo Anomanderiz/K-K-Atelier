@@ -1,5 +1,5 @@
 
-# Mini Gold Spinner — contained wheel + rep toggles tiers (braces-safe CSS)
+# Mini Gold Spinner — logo fills, gold text, in-card tiers, fixed backdrop
 from __future__ import annotations
 
 import os, io, math, random, base64, datetime as dt
@@ -162,7 +162,9 @@ BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 GLOBAL_CSS = """
 <style>
 :root { --major:MAJOR_TOKEN; --text:TEXT_TOKEN; --accent:ACCENT_TOKEN; }
-html,body { background: var(--major); color: var(--text); font-size: 18px; height: 100%; }
+html,body { background: var(--major); color: var(--accent); font-size: 18px; height: 100%; }
+/* App title remains readable (not gold) */
+h2 { color: var(--text); }
 
 /* Backdrop */
 body::before { content:""; position:fixed; inset:0;
@@ -191,26 +193,31 @@ h3, h4 { margin: 0 0 14px 0; font-size: 20px }
   min-height: 760px;
 }
 
-#rep { grid-area: rep; position: relative; }
-#logo { grid-area: logo; }
+#rep { grid-area: rep; }
+#logo { grid-area: logo; display:flex; align-items:center; justify-content:center; }
+#logo .logo-box { position: relative; width:100%; height:100%; }
+.logoimg { width:100%; height:100%; object-fit: contain; display:block; filter: drop-shadow(0 8px 18px rgba(0,0,0,.35)); }
 #gold { grid-area: gold; }
 #roll { grid-area: roll; }
 #wheelcard { grid-area: wheel; position: relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 #payout { grid-area: payout; }
 
-.kpi-title { font-size: 15px; opacity: .95; letter-spacing: .3px }
-.kpi-number { font-size: 30px; font-weight: 800; color: var(--accent); }
-.kpi-sub { font-size: 14px; opacity: .92 }
+.kpi-title { font-size: 15px; letter-spacing: .3px }
+.kpi-number { font-size: 30px; font-weight: 800; }
+.kpi-sub { font-size: 14px; opacity: .98 }
 .kpi-card {
   border:1px solid var(--accent); border-radius:18px; padding:16px 18px;
   background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
   box-shadow:0 14px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+  color: var(--accent);
 }
 .kpi-click { cursor: pointer; }
-.logoimg { height: 160px; width: auto; display: block; margin: 0 auto; filter: drop-shadow(0 8px 18px rgba(0,0,0,.35)); }
 
-.form-range, input[type=range] { width: 100%; }
-input, .btn, .form-control { font-size: 16px; }
+/* Inputs/readability */
+label, .form-label, .form-check-label { color: var(--accent); }
+input, .form-control, .btn { color: var(--accent); background-color: rgba(0,0,0,.15); border-color: var(--accent); }
+.form-check-input { border-color: var(--accent); }
+.form-check-input:checked { background-color: var(--accent); }
 
 /* Wheel is fully contained in its card */
 #wheel-wrap { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1 / 1; }
@@ -224,19 +231,19 @@ input, .btn, .form-control { font-size: 16px; }
   position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
   min-width: 150px; height: 150px; border-radius: 80px; border: 1px solid var(--accent);
   background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  color: var(--text); font-weight: 900; letter-spacing: .4px; font-size: 20px;
+  color: var(--accent); font-weight: 900; letter-spacing: .4px; font-size: 20px;
   box-shadow: 0 12px 36px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
 }
 @keyframes wheelspin { from { transform: rotate(0deg); } to { transform: rotate(var(--spin-deg, 1440deg)); } }
 #spin-target.spinning { animation: wheelspin 3.0s cubic-bezier(.17,.67,.32,1.35); }
 
-#tiers-overlay { position: absolute; top: 12px; right: -12px; width: 360px; z-index: 3; display: none; }
-#tiers-overlay.show { display: block; }
+/* Tiers card renders inline, pushing layout naturally */
+#tiers-panel { margin-top: 12px; }
 .tierlist { display: grid; grid-template-columns: 1fr; gap: 10px }
 .tier { border:1px solid var(--accent); border-radius:14px; padding:12px 14px; background: rgba(255,255,255,.08); }
 .tier.current { outline: 2px solid var(--accent); }
-.tier .name { font-weight: 800; color: var(--accent); font-size: 16px }
-.tier .desc { font-size: 13px; opacity: .95 }
+.tier .name { font-weight: 800; font-size: 16px }
+.tier .desc { font-size: 13px; opacity: .98 }
 
 .kpi b { color: var(--accent) } .total { font-size: 34px; font-weight: 900; color: var(--accent); }
 
@@ -247,7 +254,6 @@ input, .btn, .form-control { font-size: 16px; }
     grid-template-areas: "logo" "gold" "rep" "wheel" "roll" "payout";
     height: auto; min-height: 0;
   }
-  #tiers-overlay { position: static; width: auto; display: block; margin-top: 10px; }
   #wheel-wrap { width: min(80vw, 90vh); }
 }
 </style>
@@ -259,7 +265,7 @@ GLOBAL_CSS = (GLOBAL_CSS
               .replace("BG_URI_TOKEN", BG_DATA_URI))
 
 def kpi_gold_ui(total:int, cap:int, boost_pct:int):
-    # Now a passive card (no toggle); reputation will toggle tiers instead.
+    # Passive card (reputation toggles tiers instead)
     return ui.div(
         {"class":"kpi-card"},
         ui.HTML(
@@ -270,7 +276,7 @@ def kpi_gold_ui(total:int, cap:int, boost_pct:int):
     )
 
 def kpi_rep_ui(jobs:int, tier:int, name:str):
-    # Make reputation the toggle button
+    # Reputation acts as the toggle
     human = tier + 1
     return ui.input_action_button(
         "toggle_tiers",
@@ -288,9 +294,11 @@ app_ui = ui.page_fixed(
     ui.div({"class":"grid"},
         ui.div({"id":"rep","class":"card"}, ui.h4("Reputation"),
                ui.output_ui("rep_kpi"),
-               ui.div({"id":"tiers-overlay","class":"card"}, ui.output_ui("tier_panel"))),
+               # tiers now render inline within the rep card, so the card grows
+               ui.output_ui("tier_panel")),
         ui.div({"id":"logo","class":"card"},
-               ui.img(src=LOGO_DATA_URI or "", class_="logoimg"),
+               ui.div({"class":"logo-box"},
+                      ui.img(src=LOGO_DATA_URI or "", class_="logoimg")),
                ui.div({"class":"kpi-sub"}, "Tip: ensure ./assets/Logo.png exists in the repo.") if not LOGO_DATA_URI else None),
         ui.div({"id":"gold","class":"card"}, ui.output_ui("gold_kpi")),
         ui.div({"id":"roll","class":"card"},
@@ -437,6 +445,8 @@ def server(input, output, session):
     @output
     @render.ui
     def tier_panel():
+        if not show_tiers.get():
+            return ui.HTML("")  # render nothing; keeps layout clean
         jobs = agg_jobs.get()
         curr = tier_idx.get()
         items = []
@@ -448,8 +458,7 @@ def server(input, output, session):
                 ui.div({"class":"name"}, f"Tier {i+1} — {name}"),
                 ui.div({"class":"desc"}, f"+{i*10}% cap • {desc}")
             ))
-        display = "block" if show_tiers.get() else "none"
-        return ui.div({"style": f"display:{display};"}, ui.div({"class":"tierlist"}, *items))
+        return ui.div({"id":"tiers-panel","class":"card"}, ui.div({"class":"tierlist"}, *items))
 
     @reactive.Effect
     @reactive.event(input.save)
