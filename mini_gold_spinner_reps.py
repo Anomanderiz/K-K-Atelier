@@ -1,5 +1,5 @@
 
-# Mini Gold Spinner — braces-safe build (fixes f-string '}' errors)
+# Mini Gold Spinner — contained wheel + rep toggles tiers (braces-safe CSS)
 from __future__ import annotations
 
 import os, io, math, random, base64, datetime as dt
@@ -52,7 +52,7 @@ def load_asset_b64(name: str) -> str:
             return base64.b64encode(f.read()).decode()
     return ""
 
-def draw_wheel(labels: List[str], size: int = 300):
+def draw_wheel(labels: List[str], size: int = 980):
     n = len(labels)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -158,13 +158,13 @@ BG_B64   = load_asset_b64("Backdrop.png")
 LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
 BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
-# --- CSS (no f-strings; token replacement to avoid brace hell) ---
+# --- CSS (braces-safe with token replacement) ---
 GLOBAL_CSS = """
 <style>
 :root { --major:MAJOR_TOKEN; --text:TEXT_TOKEN; --accent:ACCENT_TOKEN; }
 html,body { background: var(--major); color: var(--text); font-size: 18px; height: 100%; }
 
-/* Backdrop sits behind the whole app */
+/* Backdrop */
 body::before { content:""; position:fixed; inset:0;
   background:
     linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55)),
@@ -195,7 +195,7 @@ h3, h4 { margin: 0 0 14px 0; font-size: 20px }
 #logo { grid-area: logo; }
 #gold { grid-area: gold; }
 #roll { grid-area: roll; }
-#wheelcard { grid-area: wheel; }
+#wheelcard { grid-area: wheel; position: relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 #payout { grid-area: payout; }
 
 .kpi-title { font-size: 15px; opacity: .95; letter-spacing: .3px }
@@ -212,17 +212,17 @@ h3, h4 { margin: 0 0 14px 0; font-size: 20px }
 .form-range, input[type=range] { width: 100%; }
 input, .btn, .form-control { font-size: 16px; }
 
-/* Make wheel scale to viewport height */
-#wheel-wrap { position: relative; width: min(95vh, 1100px); margin: 0 auto; aspect-ratio: 1 / 1; }
+/* Wheel is fully contained in its card */
+#wheel-wrap { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1 / 1; }
 #wheel-img, #spin-target { width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 14px 44px rgba(0,0,0,.55); }
 #pointer {
-  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
   width: 0; height: 0; border-left: 20px solid transparent; border-right: 20px solid transparent;
   border-bottom: 34px solid var(--accent); filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));
 }
 .spin-btn {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-  min-width: 160px; height: 160px; border-radius: 88px; border: 1px solid var(--accent);
+  min-width: 150px; height: 150px; border-radius: 80px; border: 1px solid var(--accent);
   background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
   color: var(--text); font-weight: 900; letter-spacing: .4px; font-size: 20px;
   box-shadow: 0 12px 36px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
@@ -259,25 +259,27 @@ GLOBAL_CSS = (GLOBAL_CSS
               .replace("BG_URI_TOKEN", BG_DATA_URI))
 
 def kpi_gold_ui(total:int, cap:int, boost_pct:int):
-    return ui.input_action_button(
-        "toggle_tiers",
-        ui.HTML(
-            f"<div class='kpi-title'>Total Gold Earned</div>"
-            f"<div class='kpi-number'>{int(total)} gp</div>"
-            f"<div class='kpi-sub'>Current cap: {cap} gp (+{boost_pct}% from reputation) — click to view tiers</div>"
-        ),
-        class_="kpi-card kpi-click"
-    )
-
-def kpi_rep_ui(jobs:int, tier:int, name:str):
-    human = tier + 1
+    # Now a passive card (no toggle); reputation will toggle tiers instead.
     return ui.div(
         {"class":"kpi-card"},
         ui.HTML(
+            f"<div class='kpi-title'>Total Gold Earned</div>"
+            f"<div class='kpi-number'>{int(total)} gp</div>"
+            f"<div class='kpi-sub'>Current cap: {cap} gp (+{boost_pct}% from reputation)</div>"
+        )
+    )
+
+def kpi_rep_ui(jobs:int, tier:int, name:str):
+    # Make reputation the toggle button
+    human = tier + 1
+    return ui.input_action_button(
+        "toggle_tiers",
+        ui.HTML(
             f"<div class='kpi-title'>Reputation</div>"
             f"<div class='kpi-number'>Tier {human}/10 — {name}</div>"
-            f"<div class='kpi-sub'>{jobs} jobs completed • +{tier*10}% max-cap bonus</div>"
-        )
+            f"<div class='kpi-sub'>{jobs} jobs completed • +{tier*10}% max-cap bonus — click to view tiers</div>"
+        ),
+        class_="kpi-card kpi-click"
     )
 
 app_ui = ui.page_fixed(
