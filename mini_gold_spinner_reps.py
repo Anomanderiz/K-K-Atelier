@@ -1,5 +1,5 @@
 
-# K&K Atelier — Mini Gold Spinner (Wide UI + Assets Loader)
+# K&K Atelier — Mini Gold Spinner (Wide+Tall UI, Backdrop Background)
 from __future__ import annotations
 
 import os, io, math, random, base64, datetime as dt
@@ -48,9 +48,6 @@ def roll_to_base_gold(roll: int) -> float:
     return 50.0 + (roll - 1) * 100.0 / 29.0  # 50–150
 
 def load_asset_b64(name: str) -> str:
-    """
-    Tries to load ./assets/<name>. Returns base64 string or '' if missing.
-    """
     here = os.path.dirname(__file__)
     path = os.path.join(here, "assets", name)
     if os.path.exists(path):
@@ -58,11 +55,11 @@ def load_asset_b64(name: str) -> str:
             return base64.b64encode(f.read()).decode()
     return ""
 
-def draw_wheel(labels: List[str], size: int = 820):
+def draw_wheel(labels: List[str], size: int = 980):
     n = len(labels)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    cx, cy, r = size // 2, size // 2, size // 2 - 6
+    cx, cy, r = size // 2, size // 2, size // 2 - 7
     palette = ["#3a2336", "#27151f", "#462a41", "#351f2e"]
     for i in range(n):
         start = 360 * i / n - 90
@@ -71,13 +68,13 @@ def draw_wheel(labels: List[str], size: int = 820):
                    fill=palette[i % len(palette)], outline="#2a1627")
     d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=ACCENT, width=6)
     try:
-        font = ImageFont.truetype("DejaVuSans.ttf", 20)
+        font = ImageFont.truetype("DejaVuSans.ttf", 24)
     except Exception:
         font = ImageFont.load_default()
     for i, lab in enumerate(labels):
         ang = math.radians(360 * (i + 0.5) / n - 90)
-        tx = cx + int((r - 92) * math.cos(ang))
-        ty = cy + int((r - 92) * math.sin(ang))
+        tx = cx + int((r - 120) * math.cos(ang))
+        ty = cy + int((r - 120) * math.sin(ang))
         d.text((tx, ty), lab, fill=TEXT_COL, font=font, anchor="mm")
     return img
 
@@ -169,20 +166,31 @@ BG_DATA_URI   = f"data:image/png;base64,{BG_B64}" if BG_B64 else ""
 GLOBAL_CSS = f"""
 <style>
 :root{{ --major:{MAJOR_BG}; --text:{TEXT_COL}; --accent:{ACCENT}; }}
-html,body{{background:var(--major);color:var(--text); font-size:17px;}}
-.container {{ max-width: 1600px !important; }}
-body::before{{ content:""; position:fixed; inset:0; background: url({{BG_DATA_URI}}) center/cover no-repeat fixed; opacity:.22; z-index:-1;}}
+html,body{{background:var(--major);color:var(--text); font-size:18px; height:100%;}}
+/* Backdrop sits behind the whole app */
+body::before{{ content:""; position:fixed; inset:0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55)),
+    url({{BG_DATA_URI}}) center/cover no-repeat fixed;
+  opacity:1; z-index:-1;}}
+
+.container {{ max-width: 1760px !important; min-height: 100vh; padding-bottom: 32px;}}
 
 *{{box-sizing:border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}}
-h2{{margin:0 0 18px 0; font-size:34px}}
-h3,h4{{margin:0 0 12px 0;}}
-.card{{background:rgba(255,255,255,0.06);border:1px solid var(--accent);border-radius:20px; padding:18px;}}
-.grid{{display:grid; gap:22px;
-  grid-template-columns: 1.3fr 1fr 1.1fr;
+h2{{margin:0 0 22px 0; font-size:38px}}
+h3,h4{{margin:0 0 14px 0; font-size:20px}}
+.card{{background:rgba(34, 16, 30, 0.52);border:1px solid var(--accent);border-radius:22px; padding:20px;}}
+
+.grid{{display:grid; gap:24px;
+  grid-template-columns: 1.2fr 0.9fr 1fr;
+  grid-template-rows: minmax(220px, 1fr) minmax(520px, 1fr);
   grid-template-areas:
     "rep logo gold"
     "roll wheel payout";
-  align-items:stretch; min-height: 680px;}}
+  align-items:stretch;
+  height: calc(100vh - 160px);  /* Fill vertical space under the title */
+  min-height: 760px;}
+
 #rep{{grid-area:rep; position:relative;}}
 #logo{{grid-area:logo;}}
 #gold{{grid-area:gold;}}
@@ -190,32 +198,33 @@ h3,h4{{margin:0 0 12px 0;}}
 #wheelcard{{grid-area:wheel;}}
 #payout{{grid-area:payout;}}
 
-.kpi-title{{font-size:14px;opacity:.9;letter-spacing:.3px}}
-.kpi-number{{font-size:28px;font-weight:800;color:var(--accent);}}
-.kpi-sub{{font-size:14px;opacity:.9}}
-.kpi-card{{border:1px solid var(--accent);border-radius:16px;padding:14px 16px;
+.kpi-title{{font-size:15px;opacity:.95;letter-spacing:.3px}}
+.kpi-number{{font-size:30px;font-weight:800;color:var(--accent);}}
+.kpi-sub{{font-size:14px;opacity:.92}}
+.kpi-card{{border:1px solid var(--accent);border-radius:18px;padding:16px 18px;
   background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
   box-shadow:0 14px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);}}
 .kpi-click{{cursor:pointer;}}
-.logoimg{{height:140px;width:auto;display:block;margin:0 auto;filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));}}
+.logoimg{{height:160px;width:auto;display:block;margin:0 auto;filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));}}
 
 .form-range, input[type=range] {{ width: 100%; }}
 input, .btn, .form-control {{ font-size: 16px; }}
 
-#wheel-wrap{{position:relative; width:100%; max-width:880px; margin:0 auto; aspect-ratio:1/1;}}
+/* Make wheel scale to viewport height */
+#wheel-wrap{{position:relative; width:min(95vh, 1100px); margin:0 auto; aspect-ratio:1/1;}}
 #wheel-img, #spin-target{{width:100%; height:100%; border-radius:50%; box-shadow:0 14px 44px rgba(0,0,0,.55);}}
-#pointer{{position:absolute;top:-10px;left:50%;transform:translateX(-50%);
-  width:0;height:0;border-left:18px solid transparent;border-right:18px solid transparent;
-  border-bottom:30px solid var(--accent);filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));}}
+#pointer{{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+  width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;
+  border-bottom:34px solid var(--accent);filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));}}
 .spin-btn{{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  min-width:150px;height:150px;border-radius:80px;border:1px solid var(--accent);
+  min-width:160px;height:160px;border-radius:88px;border:1px solid var(--accent);
   background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  color:var(--text);font-weight:800;letter-spacing:.4px; font-size:18px;
+  color:var(--text);font-weight:900;letter-spacing:.4px; font-size:20px;
   box-shadow:0 12px 36px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);}}
 @keyframes wheelspin{{from{{transform:rotate(0deg);}}to{{transform:rotate(var(--spin-deg,1440deg));}}}}
 #spin-target.spinning{{animation:wheelspin 3.0s cubic-bezier(.17,.67,.32,1.35);}}
 
-#tiers-overlay{{position:absolute; top:12px; right:-12px; width:340px; z-index:3; display:none;}}
+#tiers-overlay{{position:absolute; top:12px; right:-12px; width:360px; z-index:3; display:none;}}
 #tiers-overlay.show{{display:block;}}
 .tierlist{{display:grid;grid-template-columns:1fr;gap:10px}}
 .tier{{border:1px solid var(--accent);border-radius:14px;padding:12px 14px;background:rgba(255,255,255,.08);}}
@@ -223,12 +232,15 @@ input, .btn, .form-control {{ font-size: 16px; }}
 .tier .name{{font-weight:800;color:var(--accent); font-size:16px}}
 .tier .desc{{font-size:13px;opacity:.95}}
 
-.kpi b{{color:var(--accent)}} .total{{font-size:32px;font-weight:900;color:var(--accent);}}
+.kpi b{{color:var(--accent)}} .total{{font-size:34px;font-weight:900;color:var(--accent);}}
 
 @media (max-width: 1200px) {{
-  .grid{{grid-template-columns: 1fr; grid-template-areas:
-    "logo" "gold" "rep" "wheel" "roll" "payout"; }}
+  .grid{{grid-template-columns: 1fr; grid-template-rows: auto auto auto auto auto auto;
+    grid-template-areas:
+    "logo" "gold" "rep" "wheel" "roll" "payout";
+    height: auto; min-height: 0;}}
   #tiers-overlay{{position:static; width:auto; display:block; margin-top:10px;}}
+  #wheel-wrap{{ width: min(80vw, 90vh); }}
 }}
 </style>
 """
@@ -255,7 +267,7 @@ def kpi_rep_ui(jobs:int, tier:int, name:str):
         )
     )
 
-app_ui = ui.page_fixed(  # keep fixed for margins; expand via CSS .container width
+app_ui = ui.page_fixed(
     ui.head_content(ui.HTML(GLOBAL_CSS)),
     ui.h2(APP_TITLE),
     ui.div({"class":"grid"},
@@ -263,8 +275,8 @@ app_ui = ui.page_fixed(  # keep fixed for margins; expand via CSS .container wid
                ui.output_ui("rep_kpi"),
                ui.div({"id":"tiers-overlay","class":"card"}, ui.output_ui("tier_panel"))),
         ui.div({"id":"logo","class":"card"},
-               ui.img(src=LOGO_DATA_URI or "", class_="logoimg"),
-               ui.div({"class":"kpi-sub"}, "Tip: ensure ./assets/Logo.png exists in the repo.") if not LOGO_DATA_URI else None),
+               ui.img(src=(f"data:image/png;base64,{LOGO_B64}") if LOGO_B64 else "", class_="logoimg"),
+               ui.div({"class":"kpi-sub"}, "Tip: ensure ./assets/Logo.png exists in the repo.") if not LOGO_B64 else None),
         ui.div({"id":"gold","class":"card"}, ui.output_ui("gold_kpi")),
         ui.div({"id":"roll","class":"card"},
             ui.h4("Rolls and Flair"),
@@ -289,7 +301,7 @@ app_ui = ui.page_fixed(  # keep fixed for margins; expand via CSS .container wid
 
 def server(input, output, session):
     labels = [f"×{m:g}" for m in WHEEL_MULTS]
-    wheel_b64 = to_b64(draw_wheel(labels, size=820))
+    wheel_b64 = to_b64(draw_wheel(labels, size=980))
 
     def refresh_stats():
         if gspread is None:
@@ -330,7 +342,7 @@ def server(input, output, session):
         angle = last_angle.get()
         spinning = "spinning" if spin_token.get() else ""
         return ui.div({"id":"wheel-wrap"},
-            ui.div({"id":"pointer"}),  # purely decorative pointer
+            ui.div({"id":"pointer"}),
             ui.img(id="wheel-img", src=f"data:image/png;base64,{wheel_b64}"),
             ui.div(
                 ui.img(
