@@ -52,7 +52,7 @@ def load_asset_b64(name: str) -> str:
             return base64.b64encode(f.read()).decode()
     return ""
 
-def draw_wheel(labels: List[str], size: int = 820):
+def draw_wheel(labels: List[str], size: int = 300):
     n = len(labels)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
