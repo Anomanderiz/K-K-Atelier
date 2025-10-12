@@ -1,7 +1,5 @@
 
 # Mini Gold Spinner — all-gold text in cards, fixed backdrop, editable palette
-from __future__ import annotations
-
 import os, io, math, random, base64, datetime as dt
 from typing import List, Optional, Tuple
 
@@ -28,7 +26,7 @@ WHEEL_MULTS = [0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5]
 TIER_NAMES = [
 
 # Bonus percent given a zero-based tier index; final tier grants 100%
-def tier_bonus_pct(tier:int, total_tiers:int=len(TIER_NAMES)) -> int:
+def tier_bonus_pct(tier:int, total_tiers:int=len(TIER_NAMES)):
     return 100 if tier >= (total_tiers - 1) else tier * 10
     "Dusting Dabbler","Curtain–Cord Wrangler","Tapestry Tender","Chandelier Charmer",
     "Parlour Perfectionist","Gilded Guilder","Salon Savant","Waterdhavian Tastemaker",
@@ -46,11 +44,11 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis
 
 def clamp(v, lo, hi): return max(lo, min(hi, v))
 
-def roll_to_base_gold(roll: int) -> float:
+def roll_to_base_gold(roll):
     roll = clamp(int(roll), 1, 30)
     return 50.0 + (roll - 1) * 100.0 / 29.0  # 50–150
 
-def load_asset_b64(name: str) -> str:
+def load_asset_b64(name):
     here = os.path.dirname(__file__)
     path = os.path.join(here, "assets", name)
     if os.path.exists(path):
@@ -58,7 +56,7 @@ def load_asset_b64(name: str) -> str:
             return base64.b64encode(f.read()).decode()
     return ""
 
-def draw_wheel(labels: list[str], size: int = 980):
+def draw_wheel(labels, size= 980):
     n = len(labels)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -82,7 +80,7 @@ def draw_wheel(labels: list[str], size: int = 980):
         d.text((tx, ty), lab, fill="#eaebec", font=font, anchor="mm")
     return img
 
-def to_b64(img: Image.Image) -> str:
+def to_b64(img):
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
@@ -118,7 +116,7 @@ def open_worksheet(gc):
     except Exception as e:
         return None, f"Open sheet error: {e}"
 
-def ensure_headers(ws) -> None:
+def ensure_headers(ws):
     try:
         first_row = ws.row_values(1)
         if not first_row:
@@ -126,14 +124,14 @@ def ensure_headers(ws) -> None:
     except Exception:
         pass
 
-def append_result(ws, row_values: list) -> Optional[str]:
+def append_result(ws, row_values):
     try:
         ws.append_row(row_values, value_input_option="USER_ENTERED")
         return None
     except Exception as e:
         return str(e)
 
-def fetch_stats(ws) -> Tuple[float,int,Optional[str]]:
+def fetch_stats(ws):
     try:
         col = ws.col_values(8)[1:]
         total = 0.0
@@ -161,7 +159,7 @@ show_tiers     = reactive.Value(False)
 
 # ---------------- Assets ----------------
 LOGO_B64 = load_asset_b64("Logo.png")
-BG_B64   = load_asset_b64("backdrop.png")
+BG_B64   = load_asset_b64("Backdrop.png")
 LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
 BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
@@ -301,7 +299,7 @@ GLOBAL_CSS = (GLOBAL_CSS
               .replace("CARD_ALPHA_TOKEN", f"{CARD_ALPHA:.2f}")
               .replace("BG_URI_TOKEN", BG_DATA_URI))
 
-def kpi_gold_ui(total:int, cap:int, boost_pct:int):
+def kpi_gold_ui(total, cap, boost_pct):
     return ui.div(
         {"class":"kpi-card"},
         ui.HTML(
@@ -311,7 +309,7 @@ def kpi_gold_ui(total:int, cap:int, boost_pct:int):
         )
     )
 
-def kpi_rep_ui(jobs:int, tier:int, name:str):
+def kpi_rep_ui(jobs, tier, name):
     human = tier + 1
     return ui.input_action_button(
         "toggle_tiers",
@@ -424,7 +422,7 @@ def server(input, output, session):
         last_angle.set(random.randint(4, 7) * 360 + (idx + 0.5) * seg)
         spin_token.set(True)
 
-    def narrative_bonus_pct() -> float:
+    def narrative_bonus_pct():
         bonuses = []
         if input.flair_pass():
             bonuses.append(0.10)
@@ -456,7 +454,7 @@ def server(input, output, session):
             ui.div({"class":"kpi"}, f"Base from roll {roll}:  ", ui.tags.b(f"{base:.0f} gp")),
             ui.div({"class":"kpi"}, "Wheel multiplier:       ", ui.tags.b(f"×{mult:g}")),
             ui.div({"class":"kpi"}, "Narrative bonus:        ", ui.tags.b(f"+{int(flair*100)}%")),
-            ui.div({"class":"kpi"}, f"Current cap (Tier {tier+1}): ", ui.tags.b(f"{cap} gp")),
+            ui.div({"class", f"Current cap (Tier {tier+1}): ", ui.tags.b(f"{cap} gp")),
             ui.hr(),
             ui.div({"class":"total"}, f"Final award: {total} gp"),
         )
