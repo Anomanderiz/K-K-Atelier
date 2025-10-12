@@ -21,11 +21,15 @@ try:
 except Exception:
     gspread = None  # type: ignore
 
-APP_TITLE = "K&K Atelier — Bespoke Interiors"
+APP_TITLE = "K&K Atelier — Mini Gold Spinner"
 
 # ----------------------- Game constants -----------------------
 WHEEL_MULTS = [0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5]
 TIER_NAMES = [
+
+# Bonus percent given a zero-based tier index; final tier grants 100%
+def tier_bonus_pct(tier:int, total_tiers:int=len(TIER_NAMES)) -> int:
+    return 100 if tier >= (total_tiers - 1) else tier * 10
     "Dusting Dabbler","Curtain–Cord Wrangler","Tapestry Tender","Chandelier Charmer",
     "Parlour Perfectionist","Gilded Guilder","Salon Savant","Waterdhavian Tastemaker",
     "Noble–House Laureate","Master of Makeovers"
@@ -157,7 +161,7 @@ show_tiers     = reactive.Value(False)
 
 # ---------------- Assets ----------------
 LOGO_B64 = load_asset_b64("Logo.png")
-BG_B64   = load_asset_b64("backdrop.png")
+BG_B64   = load_asset_b64("Backdrop.png")
 LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
 BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
@@ -176,7 +180,7 @@ GLOBAL_CSS = """
 }
 /* Default text is gold; the title uses --title */
 
-/* Force transparency on all common layout wrappers so backdrop is visible */
+/* Force transparency on all main wrappers so backdrop is visible */
 body, main, .container, .container-fluid, .row, .col, header, nav, footer, .navbar, .page-wrapper, .bslib-page-fill {
   background: transparent !important;
 }
@@ -314,7 +318,7 @@ def kpi_rep_ui(jobs:int, tier:int, name:str):
         ui.HTML(
             f"<div class='kpi-title'>Reputation</div>"
             f"<div class='kpi-number'>Tier {human}/10 — {name}</div>"
-            f"<div class='kpi-sub'>{jobs} jobs completed • +{tier*10}% max-cap bonus — click to view tiers</div>"
+            f"<div class='kpi-sub'>{jobs} jobs completed • +{tier_bonus_pct(tier)}% max-cap bonus — click to view tiers</div>"
         ),
         class_="kpi-card kpi-click"
     )
@@ -438,7 +442,8 @@ def server(input, output, session):
         flair = narrative_bonus_pct()
         raw = base * mult * (1.0 + flair)
         tier = int(tier_idx.get())
-        cap = int(round(BASE_CAP * (1.0 + 0.10 * tier)))
+        bonus_pct = tier_bonus_pct(tier)
+        cap = int(round(BASE_CAP * (1.0 + bonus_pct/100.0)))
         total = int(round(clamp(raw, MIN_PAYOUT, cap)))
         return roll, base, mult, flair, raw, total, cap
 
@@ -460,8 +465,9 @@ def server(input, output, session):
     @render.ui
     def gold_kpi():
         tier = int(tier_idx.get())
-        cap  = int(round(BASE_CAP * (1.0 + 0.10 * tier)))
-        return kpi_gold_ui(agg_gold.get(), cap, tier * 10)
+        bonus_pct = tier_bonus_pct(tier)
+        cap  = int(round(BASE_CAP * (1.0 + bonus_pct/100.0)))
+        return kpi_gold_ui(agg_gold.get(), cap, bonus_pct)
 
     @output
     @render.text
@@ -487,7 +493,7 @@ def server(input, output, session):
             klass = "tier current" if i == curr else "tier"
             items.append(ui.div({"class": klass},
                 ui.div({"class":"name"}, f"Tier {i+1} — {name}"),
-                ui.div({"class":"desc"}, f"+{i*10}% cap • {desc}")
+                ui.div({"class":"desc"}, f"+{tier_bonus_pct(i)}% cap • {desc}")
             ))
         return ui.div({"id":"tiers-panel"}, ui.div({"class":"tierlist"}, *items))
 
