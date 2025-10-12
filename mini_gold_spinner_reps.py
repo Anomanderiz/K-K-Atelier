@@ -97,10 +97,10 @@ def fetch_stats(ws):
         return total, jobs, None
     except Exception as e: return 0.0, 0, str(e)
 
-selected_index = reactive.Value[int | None](None)
+selected_index = reactive.Value(None)
 spin_token = reactive.Value(None)
 last_angle = reactive.Value(0.0)
-gs_status = reactive.Value("Not connected")
+gs_status_msg = reactive.Value("Not connected")
 agg_gold = reactive.Value(0)
 agg_jobs = reactive.Value(0)
 tier_idx = reactive.Value(0)
@@ -176,7 +176,7 @@ app_ui = ui.page_fixed(
             ui.input_checkbox("flair_ex","Excellent narrative (+25%)",False),
             ui.input_text("note","Note (optional)",""),
             ui.hr(), ui.input_action_button("save","Save result to Google Sheets"),
-            ui.div({"class":"smallnote"},"Status: ", ui.output_text("gs_status"))
+            ui.div({"class":"smallnote"},"Status: ", ui.output_text("gs_status_text"))
         ),
         ui.card(ui.h4("Wheel of Fortune"), ui.output_ui("wheel_ui"), ui.output_ui("wheel_result")),
         ui.card(ui.h4("Payout"), ui.output_ui("payout_block"), ui.output_ui("tier_panel"))
@@ -190,33 +190,38 @@ def server(input, output, session):
 
     def refresh_stats():
         gc, err = ensure_gspread_client()
-        if err: gs_status.set(f"❌ {err}"); return None, err
+        if err: gs_status_msg.set(f"❌ {err}"); return None, err
         ws, err = open_worksheet(gc)
-        if err: gs_status.set(f"❌ {err}"); return None, err
+        if err: gs_status_msg.set(f"❌ {err}"); return None, err
         ensure_headers(ws)
         total, jobs, ferr = fetch_stats(ws)
-        if ferr: gs_status.set(f"❌ Fetch failed: {ferr}")
+        if ferr: gs_status_msg.set(f"❌ Fetch failed: {ferr}")
         else:
-            gs_status.set("✅ Connected to Google Sheets")
+            gs_status_msg.set("✅ Connected to Google Sheets")
             agg_gold.set(int(round(total))); agg_jobs.set(int(jobs))
             tier = min(jobs // 5, 9); tier_idx.set(int(tier))
         return ws, None
 
     ws_cache, _ = refresh_stats()
 
-    @output @render.ui
+    @output
+    @render.ui
     def gold_kpi():
         tier = tier_idx.get(); cap = int(round(BASE_CAP*(1.0+0.10*tier))); boost=tier*10
         return kpi_gold_ui(agg_gold.get(), cap, boost)
 
-    @output @render.ui
+    @output
+    @render.ui
     def rep_kpi():
         return kpi_rep_ui(agg_jobs.get(), tier_idx.get(), TIER_NAMES[tier_idx.get()])
 
-    @output @render.text
-    def gs_status(): return gs_status.get()
+    @output
+    @render.text
+    def gs_status_text():
+        return gs_status_msg.get()
 
-    @output @render.ui
+    @output
+    @render.ui
     def wheel_ui():
         angle = last_angle.get(); spinning = "spinning" if spin_token.get() else ""
         return ui.div({"id":"wheel-wrap"},
@@ -231,7 +236,8 @@ def server(input, output, session):
             )
         )
 
-    @reactive.Effect @reactive.event(input.spin)
+    @reactive.Effect
+    @reactive.event(input.spin)
     def _spin():
         n=len(WHEEL_MULTS); idx=random.randrange(n); selected_index.set(idx); seg=360/n
         spin_token.set(None); last_angle.set(random.randint(4,7)*360 + (idx+0.5)*seg); spin_token.set(True)
@@ -251,7 +257,8 @@ def server(input, output, session):
         raw=base*mult*(1.0+flair); cap=dynamic_cap(); total=clamp(round(raw), MIN_PAYOUT, cap)
         return roll, base, mult, flair, raw, total, cap
 
-    @output @render.ui
+    @output
+    @render.ui
     def payout_block():
         roll, base, mult, flair, raw, total, cap = compute_payout(); tier=tier_idx.get()
         return ui.div(
@@ -262,10 +269,12 @@ def server(input, output, session):
             ui.hr(), ui.div({"class":"total"}, f"Final award: {total} gp"),
         )
 
-    @reactive.Effect @reactive.event(input.toggle_tiers)
+    @reactive.Effect
+    @reactive.event(input.toggle_tiers)
     def _toggle(): show_tiers.set(not show_tiers.get())
 
-    @output @render.ui
+    @output
+    @render.ui
     def tier_panel():
         if not show_tiers.get(): return ui.div()
         jobs=agg_jobs.get(); curr=tier_idx.get(); items=[]
@@ -278,22 +287,23 @@ def server(input, output, session):
             ))
         return ui.div({"class":"tierlist"}, *items)
 
-    @reactive.Effect @reactive.event(input.save)
+    @reactive.Effect
+    @reactive.event(input.save)
     def _save_to_sheets():
         if selected_index.get() is None:
             ui.notification_show("Spin the wheel before saving.", type="warning", duration=4); return
         gc, err = ensure_gspread_client()
-        if err: gs_status.set(f"❌ {err}"); ui.notification_show(f"Google Sheets not ready: {err}", type="error", duration=6); return
+        if err: gs_status_msg.set(f"❌ {err}"); ui.notification_show(f"Google Sheets not ready: {err}", type="error", duration=6); return
         ws, err = open_worksheet(gc)
-        if err: gs_status.set(f"❌ {err}"); ui.notification_show(f"Google Sheet open error: {err}", type="error", duration=6); return
+        if err: gs_status_msg.set(f"❌ {err}"); ui.notification_show(f"Google Sheet open error: {err}", type="error", duration=6); return
         ensure_headers(ws)
         roll, base, mult, flair, raw, total, cap = compute_payout()
         note=(input.note() or "").strip(); now_iso=dt.datetime.now().isoformat(timespec="seconds")
         row=[now_iso, note, roll, round(base,2), mult, round(flair,4), round(raw,2), total]
         err = append_result(ws, row)
-        if err: gs_status.set(f"❌ Append failed: {err}"); ui.notification_show(f"Append failed: {err}", type="error", duration=6)
+        if err: gs_status_msg.set(f"❌ Append failed: {err}"); ui.notification_show(f"Append failed: {err}", type="error", duration=6)
         else:
-            gs_status.set("✅ Saved to Google Sheets"); ui.notification_show("Saved to Google Sheets.", type="message", duration=4)
+            gs_status_msg.set("✅ Saved to Google Sheets"); ui.notification_show("Saved to Google Sheets.", type="message", duration=4)
             total_gold, jobs, ferr = fetch_stats(ws)
             if not ferr:
                 agg_gold.set(int(round(total_gold))); agg_jobs.set(int(jobs)); tier=min(jobs//5,9); tier_idx.set(int(tier))
