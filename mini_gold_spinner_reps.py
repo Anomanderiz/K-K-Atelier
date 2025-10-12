@@ -1,5 +1,5 @@
 
-# Mini Gold Spinner — logo fills, gold text, in-card tiers, fixed backdrop
+# Mini Gold Spinner — fixed backdrop, editable colors, contained tiers, logo fills
 from __future__ import annotations
 
 import os, io, math, random, base64, datetime as dt
@@ -8,6 +8,13 @@ from typing import List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 from shiny import App, ui, reactive, render
 
+# ----------------------- Quick color palette (edit here) -----------------------
+ACCENT   = "#ecc791"   # Gold: default text, buttons, outlines
+TEXT_COL = "#eaebec"   # App title color only
+MAJOR_BG = "#301c2d"   # Page background behind the backdrop
+CARD_ALPHA = 0.52      # Card background opacity (0..1), tweak for contrast
+
+# ----------------------- Optional Google Sheets deps -----------------------
 try:
     import gspread  # type: ignore
     from google.oauth2 import service_account  # type: ignore
@@ -16,12 +23,7 @@ except Exception:
 
 APP_TITLE = "K&K Atelier — Mini Gold Spinner"
 
-# Palette
-MAJOR_BG = "#301c2d"
-TEXT_COL = "#eaebec"
-ACCENT   = "#ecc791"
-
-# Game constants
+# ----------------------- Game constants -----------------------
 WHEEL_MULTS = [0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5]
 TIER_NAMES = [
     "Dusting Dabbler","Curtain–Cord Wrangler","Tapestry Tender","Chandelier Charmer",
@@ -31,7 +33,7 @@ TIER_NAMES = [
 BASE_CAP   = 250
 MIN_PAYOUT = 50
 
-# Google Sheets config
+# ---------------- Google Sheets config ----------------
 SPREADSHEET_ID = (os.getenv("GSHEETS_SPREADSHEET_ID") or os.getenv("SHEET_ID","")).strip()
 WORKSHEET_NAME = (os.getenv("GSHEETS_WORKSHEET") or os.getenv("WORKSHEET_NAME","Sheet1")).strip()
 SA_JSON_INLINE = (os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") or os.getenv("GCP_SA_JSON","")).strip()
@@ -52,7 +54,7 @@ def load_asset_b64(name: str) -> str:
             return base64.b64encode(f.read()).decode()
     return ""
 
-def draw_wheel(labels: List[str], size: int = 980):
+def draw_wheel(labels: list[str], size: int = 980):
     n = len(labels)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -69,10 +71,11 @@ def draw_wheel(labels: List[str], size: int = 980):
     except Exception:
         font = ImageFont.load_default()
     for i, lab in enumerate(labels):
+        import math
         ang = math.radians(360 * (i + 0.5) / n - 90)
         tx = cx + int((r - 120) * math.cos(ang))
         ty = cy + int((r - 120) * math.sin(ang))
-        d.text((tx, ty), lab, fill=TEXT_COL, font=font, anchor="mm")
+        d.text((tx, ty), lab, fill="#eaebec", font=font, anchor="mm")
     return img
 
 def to_b64(img: Image.Image) -> str:
@@ -119,7 +122,7 @@ def ensure_headers(ws) -> None:
     except Exception:
         pass
 
-def append_result(ws, row_values: List) -> Optional[str]:
+def append_result(ws, row_values: list) -> Optional[str]:
     try:
         ws.append_row(row_values, value_input_option="USER_ENTERED")
         return None
@@ -141,7 +144,7 @@ def fetch_stats(ws) -> Tuple[float,int,Optional[str]]:
     except Exception as e:
         return 0.0, 0, str(e)
 
-# Reactive state
+# ---------------- Shiny reactive state ----------------
 selected_index = reactive.Value(None)   # type: ignore
 last_angle     = reactive.Value(0.0)
 spin_token     = reactive.Value(False)
@@ -152,26 +155,37 @@ agg_jobs       = reactive.Value(0)
 tier_idx       = reactive.Value(0)
 show_tiers     = reactive.Value(False)
 
-# Assets
+# ---------------- Assets ----------------
 LOGO_B64 = load_asset_b64("Logo.png")
 BG_B64   = load_asset_b64("Backdrop.png")
 LOGO_DATA_URI = ("data:image/png;base64," + LOGO_B64) if LOGO_B64 else ""
 BG_DATA_URI   = ("data:image/png;base64," + BG_B64) if BG_B64 else ""
 
-# --- CSS (braces-safe with token replacement) ---
+# ---------------- UI ----------------
+# We avoid f-string braces in CSS by token replacement.
 GLOBAL_CSS = """
 <style>
-:root { --major:MAJOR_TOKEN; --text:TEXT_TOKEN; --accent:ACCENT_TOKEN; }
+:root {
+  --major:MAJOR_TOKEN;
+  --title:TEXT_TOKEN;
+  --accent:ACCENT_TOKEN;
+  --card-alpha:CARD_ALPHA_TOKEN;
+}
+/* Default text across the app is gold; the title uses --title */
 html,body { background: var(--major); color: var(--accent); font-size: 18px; height: 100%; }
-/* App title remains readable (not gold) */
-h2 { color: var(--text); }
+h2 { color: var(--title); }
 
-/* Backdrop */
-body::before { content:""; position:fixed; inset:0;
-  background:
-    linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55)),
-    url(BG_URI_TOKEN) center/cover no-repeat fixed;
-  opacity: 1; z-index: -1;
+/* Real backdrop layer under everything (reliable across browsers) */
+#backdrop {
+  position: fixed; inset: 0;
+  background: url(BG_URI_TOKEN) center/cover no-repeat fixed;
+  z-index: -2;
+}
+/* Optional scrim for contrast (toggle opacity by changing rgba alpha) */
+#scrim {
+  position: fixed; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55));
+  z-index: -1;
 }
 
 .container { max-width: 1760px !important; min-height: 100vh; padding-bottom: 32px; }
@@ -179,21 +193,24 @@ body::before { content:""; position:fixed; inset:0;
 * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
 h2 { margin: 0 0 22px 0; font-size: 38px }
 h3, h4 { margin: 0 0 14px 0; font-size: 20px }
-.card { background: rgba(236, 199, 145, 1); border: 1px solid var(--accent); border-radius: 22px; padding: 20px; }
+
+.card {
+  background: rgba(34, 16, 30, var(--card-alpha));
+  border: 1px solid var(--accent); border-radius: 22px; padding: 20px;
+}
 
 .grid {
   display: grid; gap: 24px;
   grid-template-columns: 1.2fr 0.9fr 1fr;
-  grid-template-rows: minmax(220px, 1fr) minmax(520px, 1fr);
+  grid-template-rows: auto 1fr;              /* <-- top row grows with reputation */
   grid-template-areas:
     "rep logo gold"
     "roll wheel payout";
   align-items: stretch;
-  height: calc(100vh - 160px);
   min-height: 760px;
 }
 
-#rep { grid-area: rep; }
+#rep { grid-area: rep; display:flex; flex-direction:column; gap:12px; }
 #logo { grid-area: logo; display:flex; align-items:center; justify-content:center; }
 #logo .logo-box { position: relative; width:100%; height:100%; }
 .logoimg { width:100%; height:100%; object-fit: contain; display:block; filter: drop-shadow(0 8px 18px rgba(0,0,0,.35)); }
@@ -214,7 +231,7 @@ h3, h4 { margin: 0 0 14px 0; font-size: 20px }
 .kpi-click { cursor: pointer; }
 
 /* Inputs/readability */
-label, .form-label, .form-check-label { color: var(--accent); }
+label, .form-label, .form-check-label, .kpi, .kpi b { color: var(--accent); }
 input, .form-control, .btn { color: var(--accent); background-color: rgba(0,0,0,.15); border-color: var(--accent); }
 .form-check-input { border-color: var(--accent); }
 .form-check-input:checked { background-color: var(--accent); }
@@ -237,22 +254,21 @@ input, .form-control, .btn { color: var(--accent); background-color: rgba(0,0,0,
 @keyframes wheelspin { from { transform: rotate(0deg); } to { transform: rotate(var(--spin-deg, 1440deg)); } }
 #spin-target.spinning { animation: wheelspin 3.0s cubic-bezier(.17,.67,.32,1.35); }
 
-/* Tiers card renders inline, pushing layout naturally */
-#tiers-panel { margin-top: 12px; }
+/* Tiers render inline; the Rep card grows and pushes the grid row down */
+#tiers-panel { margin-top: 4px; }
 .tierlist { display: grid; grid-template-columns: 1fr; gap: 10px }
 .tier { border:1px solid var(--accent); border-radius:14px; padding:12px 14px; background: rgba(255,255,255,.08); }
 .tier.current { outline: 2px solid var(--accent); }
 .tier .name { font-weight: 800; font-size: 16px }
 .tier .desc { font-size: 13px; opacity: .98 }
 
-.kpi b { color: var(--accent) } .total { font-size: 34px; font-weight: 900; color: var(--accent); }
+.total { font-size: 34px; font-weight: 900; color: var(--accent); }
 
 @media (max-width: 1200px) {
   .grid {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto auto auto auto;
     grid-template-areas: "logo" "gold" "rep" "wheel" "roll" "payout";
-    height: auto; min-height: 0;
   }
   #wheel-wrap { width: min(80vw, 90vh); }
 }
@@ -262,10 +278,10 @@ GLOBAL_CSS = (GLOBAL_CSS
               .replace("MAJOR_TOKEN", MAJOR_BG)
               .replace("TEXT_TOKEN", TEXT_COL)
               .replace("ACCENT_TOKEN", ACCENT)
+              .replace("CARD_ALPHA_TOKEN", f"{CARD_ALPHA:.2f}")
               .replace("BG_URI_TOKEN", BG_DATA_URI))
 
 def kpi_gold_ui(total:int, cap:int, boost_pct:int):
-    # Passive card (reputation toggles tiers instead)
     return ui.div(
         {"class":"kpi-card"},
         ui.HTML(
@@ -290,11 +306,13 @@ def kpi_rep_ui(jobs:int, tier:int, name:str):
 
 app_ui = ui.page_fixed(
     ui.head_content(ui.HTML(GLOBAL_CSS)),
+    # Ensure the backdrop layers are present in the DOM
+    ui.tags.div(id="backdrop"),
+    ui.tags.div(id="scrim"),
     ui.h2(APP_TITLE),
     ui.div({"class":"grid"},
         ui.div({"id":"rep","class":"card"}, ui.h4("Reputation"),
                ui.output_ui("rep_kpi"),
-               # tiers now render inline within the rep card, so the card grows
                ui.output_ui("tier_panel")),
         ui.div({"id":"logo","class":"card"},
                ui.div({"class":"logo-box"},
@@ -382,6 +400,7 @@ def server(input, output, session):
     @reactive.event(input.spin)
     def _spin():
         n = len(WHEEL_MULTS)
+        import random
         idx = random.randrange(n)
         selected_index.set(idx)
         seg = 360 / n
@@ -446,7 +465,7 @@ def server(input, output, session):
     @render.ui
     def tier_panel():
         if not show_tiers.get():
-            return ui.HTML("")  # render nothing; keeps layout clean
+            return ui.HTML("")  # nothing when collapsed
         jobs = agg_jobs.get()
         curr = tier_idx.get()
         items = []
@@ -458,42 +477,6 @@ def server(input, output, session):
                 ui.div({"class":"name"}, f"Tier {i+1} — {name}"),
                 ui.div({"class":"desc"}, f"+{i*10}% cap • {desc}")
             ))
-        return ui.div({"id":"tiers-panel","class":"card"}, ui.div({"class":"tierlist"}, *items))
-
-    @reactive.Effect
-    @reactive.event(input.save)
-    def _save_to_sheets():
-        if gspread is None:
-            gs_status_msg.set("gspread not installed")
-            ui.notification_show("Google Sheets library (gspread) not available.", type="error", duration=6)
-            return
-        gc, err = ensure_gspread_client()
-        if err:
-            gs_status_msg.set(f"❌ {err}")
-            ui.notification_show(f"Google Sheets not ready: {err}", type="error", duration=6)
-            return
-        ws, err = open_worksheet(gc)
-        if err:
-            gs_status_msg.set(f"❌ {err}")
-            ui.notification_show(f"Google Sheet open error: {err}", type="error", duration=6)
-            return
-        ensure_headers(ws)
-        roll, base, mult, flair, raw, total, cap = compute_payout()
-        note = (input.note() or "").strip()
-        now_iso = dt.datetime.now().isoformat(timespec="seconds")
-        row = [now_iso, note, roll, round(base,2), mult, round(flair,4), round(raw,2), total]
-        err = append_result(ws, row)
-        if err:
-            gs_status_msg.set(f"❌ Append failed: {err}")
-            ui.notification_show(f"Append failed: {err}", type="error", duration=6)
-        else:
-            gs_status_msg.set("✅ Saved to Google Sheets")
-            ui.notification_show("Saved to Google Sheets.", type="message", duration=4)
-            total_gold, jobs, ferr = fetch_stats(ws)
-            if not ferr:
-                agg_gold.set(int(round(total_gold)))
-                agg_jobs.set(int(jobs))
-                tier = min(jobs // 5, 9)
-                tier_idx.set(int(tier))
+        return ui.div({"id":"tiers-panel","class":""}, ui.div({"class":"tierlist"}, *items))
 
 app = App(app_ui, server)
