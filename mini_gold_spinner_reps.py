@@ -460,7 +460,59 @@ def server(input, output, session):
             ui.div({"class":"kpi"}, f"Current cap (Tier {tier+1}): ", ui.tags.b(f"{cap} gp")),
             ui.hr(),
             ui.div({"class":"total"}, f"Final award: {total} gp"),
+        
         )
+
+    @reactive.Effect
+    @reactive.event(input.save)
+    def _save_to_sheets():
+        # Work out the current payout
+        roll, base, mult, flair, raw, total, cap = compute_payout()
+        note = (input.note() or "").strip()
+        now_iso = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+        # Row matches your HEADERS order
+        row = [
+            now_iso,                 # timestamp_iso
+            note,                    # note
+            int(roll),               # roll
+            int(round(base)),        # base_gold
+            float(mult),             # wheel_multiplier
+            int(round(flair * 100)), # narrative_pct
+            int(round(raw)),         # raw_total
+            int(total),              # final_award_gp
+        ]
+
+        # Guard: gspread present?
+        if gspread is None:
+            gs_status_msg.set("❌ gspread not installed in this environment.")
+            return
+
+        # Connect and append
+        gc, err = ensure_gspread_client()
+        if err:
+            gs_status_msg.set(f"❌ {err}")
+            return
+        ws, err = open_worksheet(gc)
+        if err:
+            gs_status_msg.set(f"❌ {err}")
+            return
+
+        ensure_headers(ws)
+        save_err = append_result(ws, row)
+        if save_err:
+            gs_status_msg.set(f"❌ Save failed: {save_err}")
+            return
+
+        gs_status_msg.set("✅ Saved to Google Sheets")
+
+        # Refresh UI totals/tier from the sheet so cards update immediately
+        total_gold, jobs_done, fetch_err = fetch_stats(ws)
+        if not fetch_err:
+            agg_gold.set(int(round(total_gold)))
+            agg_jobs.set(int(jobs_done))
+            tier = min(jobs_done // 5, len(TIER_NAMES) - 1)
+            tier_idx.set(int(tier))
 
     @output
     @render.ui
